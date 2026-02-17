@@ -9,7 +9,7 @@ import Link from 'next/link';
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
-  if (!session || !session.user || !session.user.email) return redirect("/api/auth/signin");
+  if (!session || !session.user || !session.user.email) return redirect("/login");
 
   const email = session.user.email;
 
