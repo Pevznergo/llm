@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F2F2F7;
+  /* iOS System Gray 6 (Light) */
+  --foreground: #000000;
+  --ios-blue: #007AFF;
+  --ios-indigo: #5856D6;
+  --ios-green: #34C759;
+  --ios-red: #FF3B30;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+    font-feature-settings: "cv05", "cv08", "ss01";
+    /* Inter adjustments for SF feel */
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-sm;
+  }
+
+  .glass-dark {
+    @apply bg-black/60 backdrop-blur-xl border border-white/10 shadow-lg text-white;
+  }
+
+  /* iOS Squircle Approximation */
+  .squircle {
+    border-radius: 22%;
+    /* Ideally requires clip-path url(#squircle), but substantial rounded corner is close enough for CSS-only */
+  }
+
+  .ios-card {
+    @apply bg-white rounded-[1.5rem] shadow-sm active:scale-[0.98] transition-transform duration-200;
+  }
+
+  .ios-btn {
+    @apply bg-[#007AFF] text-white font-semibold rounded-full px-6 py-3 active:opacity-70 transition-opacity;
+  }
+
+  .ios-list {
+    @apply bg-white rounded-xl overflow-hidden divide-y divide-slate-100;
+  }
+
+  .ios-list-item {
+    @apply px-4 py-3 flex items-center justify-between active:bg-slate-50 transition-colors cursor-pointer;
+  }
+}
+
+@layer components {
+
+  /* Sticker Base Styles */
+  /* Sticker Base Styles - Matching Print Output (70mm x 37mm approx 265px x 140px) */
+  .sticker-preview-container {
+    @apply w-full overflow-hidden bg-white rounded-lg shadow-sm border border-slate-200 p-8 flex justify-center;
+    background: #f0f0f0;
+  }
+
+  /* 
+     Print Dimensions: 70mm x 37mm 
+     1mm ~ 3.78px
+     Width: ~265px
+     Height: ~140px
+  */
+  .sticker {
+    width: 265px;
+    height: 140px;
+    padding: 15px 7px;
+    /* 4mm 2mm approx */
+    border: 1px dashed #ccc;
+    box-sizing: border-box;
+    background: white;
+    color: black;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }
+
+  .sticker-inner {
+    display: flex;
+    gap: 7px;
+    /* 2mm */
+    height: 100%;
+    align-items: center;
+  }
+
+  .qr-box {
+    width: 95px;
+    /* 25mm */
+    flex-shrink: 0;
+  }
+
+  .qr-box img,
+  .qr-box svg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .content-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    text-align: left;
+  }
+
+  .main-title {
+    margin: 0;
+    padding: 0;
+    font-size: 15px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    /* 1mm */
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    /* 1mm */
+    padding-left: 4px;
+    /* 1mm */
+  }
+
+  .tg-icon {
+    width: 17px;
+    /* 4.5mm */
+    height: 17px;
+    /* 4.5mm */
+    flex-shrink: 0;
+  }
+
+  .features {
+    font-size: 11px;
+    font-weight: 700;
+    color: #000;
+    background: #eee;
+    padding: 2px 6px;
+    /* 0.5mm 1.5mm */
+    border-radius: 8px;
+    /* 2mm */
+    width: fit-content;
+    margin-bottom: 2px;
+    /* 0.5mm */
+    margin-left: 4px;
+    /* 1mm */
+    text-transform: uppercase;
+  }
+
+  .prizes {
+    font-family: 'Arial Black', Gadget, sans-serif;
+    font-size: 13px;
+    font-weight: 900;
+    color: black;
+    text-transform: uppercase;
+    margin-top: 4px;
+    /* 1mm */
+    margin-left: 4px;
+    /* 1mm */
+    line-height: 1;
+  }
+}
+
+@media print {
+  .sticker {
+    border: none !important;
+    page-break-inside: avoid;
+  }
+}
