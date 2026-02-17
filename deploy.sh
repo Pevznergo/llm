@@ -9,14 +9,6 @@ echo "🚀 Starting deployment..."
 echo "📥 Pulling latest code..."
 ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "cd /root/litellm && git pull origin main"
 
-# 2. Restart Docker services (LiteLLM, Postgres, etc.)
-echo "🐳 Restarting Docker services..."
-ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "cd /root/litellm && docker-compose up -d --remove-orphans"
-
-# 3. Reload Nginx
-echo "🔄 Reloading Nginx..."
-ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "nginx -t && systemctl reload nginx"
-
 # 4. Deploy Client Portal (Next.js with PM2)
 echo "abc Deploying Client Portal..."
 ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "bash -s" << 'EOF'
