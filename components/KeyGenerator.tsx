@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { createApiKey } from "@/app/client/actions";
+import { createApiKey } from "@/app/actions";
 import { Plus, Loader2 } from "lucide-react";
 
 type FormData = {
