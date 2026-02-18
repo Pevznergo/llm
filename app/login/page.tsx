@@ -2,26 +2,35 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 import Link from "next/link";
 
 export default function LoginPage() {
+    const router = useRouter();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleCredentialsSignIn = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError(null);
         try {
             const result = await signIn("credentials", {
                 email,
                 password,
-                callbackUrl: "/",
+                redirect: false,
             });
             if (result?.error) {
-                alert("Invalid credentials");
+                setError("Invalid email or password");
+            } else if (result?.ok) {
+                router.push("/");
+                router.refresh();
             }
+        } catch {
+            setError("An unexpected error occurred");
         } finally {
             setIsLoading(false);
         }
@@ -39,6 +48,12 @@ export default function LoginPage() {
                     </div>
                     <h1 className="text-2xl font-bold text-center mb-2">Client Portal</h1>
                     <p className="text-gray-600 text-center mb-8">Sign in to continue</p>
+
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                            {error}
+                        </div>
+                    )}
 
                     {/* Credentials Form */}
                     <form onSubmit={handleCredentialsSignIn} className="space-y-4">
