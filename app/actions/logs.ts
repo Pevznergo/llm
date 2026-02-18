@@ -39,7 +39,7 @@ export async function getRequestLogs(page = 1, limit = 50, startDate?: string, e
                 completion_tokens,
                 "spend",
                 status,
-                user_id,
+                "user",
                 metadata,
                 api_base
             FROM "LiteLLM_SpendLogs"
@@ -76,7 +76,7 @@ export async function getRequestLogs(page = 1, limit = 50, startDate?: string, e
                     spend: log.spend || 0,
                     status: log.status,
                     latency,
-                    app: log.user_id || "Unknown",
+                    app: log.user || log.user_id || "Unknown",
                     provider: log.api_base || "Unknown" // Crude approximation
                 };
             }),
