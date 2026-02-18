@@ -3,7 +3,7 @@
 // Connects to LiteLLM proxy running on localhost:4000
 
 const LITELLM_BASE_URL = process.env.LITELLM_BASE_URL || "http://localhost:4000";
-const LITELLM_MASTER_KEY = process.env.APORTO_API_KEY || "";
+const LITELLM_MASTER_KEY = process.env.LITELLM_MASTER_KEY || process.env.APORTO_API_KEY || "";
 
 async function litellmFetch(path: string, options: RequestInit = {}) {
     const url = `${LITELLM_BASE_URL}${path}`;
