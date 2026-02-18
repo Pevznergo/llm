@@ -58,7 +58,7 @@ export function ActivityCharts({ data }: ActivityChartsProps) {
                 <CartesianGrid vertical={false} stroke="#E5E7EB" strokeDasharray="3 3" />
                 <Tooltip
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                    formatter={(value: number) => [unit === '$' ? `$${value.toFixed(4)}` : value.toLocaleString(), activeTab.charAt(0).toUpperCase() + activeTab.slice(1)]}
+                    formatter={(value: any) => [unit === '$' ? `$${Number(value).toFixed(4)}` : Number(value).toLocaleString(), activeTab.charAt(0).toUpperCase() + activeTab.slice(1)]}
                 />
                 <Area
                     type="monotone"
@@ -82,8 +82,8 @@ export function ActivityCharts({ data }: ActivityChartsProps) {
                             key={tab}
                             onClick={() => setActiveTab(tab as any)}
                             className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${activeTab === tab
-                                    ? 'bg-white text-gray-900 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-900'
+                                ? 'bg-white text-gray-900 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-900'
                                 }`}
                         >
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}
