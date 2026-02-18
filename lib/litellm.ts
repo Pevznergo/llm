@@ -186,12 +186,34 @@ export async function updateKey(key: string, updates: any): Promise<any> {
     }
 }
 
-export async function deleteKey(key: string): Promise<any> {
+
+export async function listUsers(): Promise<LiteLLMUser[]> {
     try {
-        const data = await litellmFetch("/key/delete", {
+        const data = await litellmFetch("/user/list");
+        const users = data.users || data || [];
+        if (!Array.isArray(users)) return [];
+
+        return users.map((u: any) => ({
+            user_id: u.user_id || u.user_email,
+            email: u.user_email || u.user_id,
+            max_budget: u.max_budget,
+            spend: u.spend || 0,
+            user_role: u.user_role,
+            request_count: u.request_count || 0,
+        }));
+    } catch (e) {
+        console.error("Failed to list users:", e);
+        return [];
+    }
+}
+
+export async function updateUser(user_id: string, updates: any): Promise<any> {
+    try {
+        const data = await litellmFetch("/user/update", {
             method: "POST",
             body: JSON.stringify({
-                keys: [key]
+                user_id: user_id,
+                ...updates
             })
         });
         return data;
