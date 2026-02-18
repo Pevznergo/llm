@@ -18,7 +18,7 @@ const navigation = [
     { name: "Activity", href: "/", icon: Activity },
     { name: "Logs", href: "/logs", icon: FileText },
     { name: "API Keys", href: "/keys", icon: Key },
-    { name: "Admin Keys", href: "/admin/keys", icon: Settings }, // Temporary admin link
+    // { name: "Admin Keys", href: "/admin/keys", icon: Settings }, // Temporary admin link -> hidden for client
     { name: "Settings", href: "/settings", icon: Settings },
 ];
 

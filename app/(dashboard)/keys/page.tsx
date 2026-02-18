@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { listKeys } from "@/lib/litellm";
 import { KeyGenerator } from "@/components/KeyGenerator";
+import { DeleteKeyButton } from "@/components/DeleteKeyButton";
 import { Copy, Trash2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
@@ -31,6 +32,7 @@ export default async function KeysPage() {
                                         <th className="px-6 py-3">Key</th>
                                         <th className="px-6 py-3">Usage</th>
                                         <th className="px-6 py-3">Limit</th>
+                                        <th className="px-6 py-3"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -57,6 +59,9 @@ export default async function KeysPage() {
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-600">
                                                     {key.max_budget ? `$${key.max_budget.toFixed(2)}` : "Unlimited"}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <DeleteKeyButton apiKey={key.key} />
                                                 </td>
                                             </tr>
                                         ))

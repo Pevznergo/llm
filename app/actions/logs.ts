@@ -32,16 +32,16 @@ export async function getRequestLogs(page = 1, limit = 50) {
         const logs = await sql`
             SELECT 
                 request_id,
-                startTime,
+                "startTime",
                 model,
-                total_tokens,
+                "total_tokens",
                 prompt_tokens,
                 completion_tokens,
-                spend,
+                "spend",
                 status
             FROM "LiteLLM_SpendLogs"
             WHERE api_key = ANY(${keyHashes})
-            ORDER BY startTime DESC
+            ORDER BY "startTime" DESC
             LIMIT ${limit} OFFSET ${offset}
         `;
 
@@ -57,7 +57,7 @@ export async function getRequestLogs(page = 1, limit = 50) {
         return {
             logs: logs.map(log => ({
                 ...log,
-                startTime: log.starttime, // pg returns lowercase column names usually
+                startTime: log.startTime || log.starttime,
                 total_tokens: log.total_tokens,
                 spend: log.spend
             })),
@@ -87,15 +87,15 @@ export async function getDailyStats() {
     try {
         const stats = await sql`
             SELECT 
-                DATE(startTime) as date,
-                SUM(spend) as spend,
+                DATE("startTime") as date,
+                SUM("spend") as spend,
                 COUNT(*) as requests,
-                SUM(total_tokens) as tokens
+                SUM("total_tokens") as tokens
             FROM "LiteLLM_SpendLogs"
             WHERE api_key = ANY(${keyHashes})
-            AND startTime > NOW() - INTERVAL '30 days'
-            GROUP BY DATE(startTime)
-            ORDER BY DATE(startTime) ASC
+            AND "startTime" > NOW() - INTERVAL '30 days'
+            GROUP BY DATE("startTime")
+            ORDER BY DATE("startTime") ASC
         `;
 
         return { dailyStats: stats };
