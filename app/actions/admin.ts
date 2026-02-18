@@ -42,10 +42,14 @@ export async function getAllKeysWithDetails() {
 }
 
 export async function assignKeyToUser(key: string, email: string) {
+    console.log(`[Admin] Assigning key ${key.substring(0, 10)}... to user ${email}`);
     await checkAdmin();
     try {
-        return await updateKey(key, { user_id: email });
+        const result = await updateKey(key, { user_id: email });
+        console.log(`[Admin] Key updated successfully:`, result);
+        return result;
     } catch (e: any) {
-        return { error: e.message };
+        console.error(`[Admin] Failed to update key:`, e);
+        throw new Error(e.message || "Failed to update key");
     }
 }
