@@ -18,6 +18,12 @@ export async function GET() {
                 FROM information_schema.columns 
                 WHERE table_name = ${logsTable.table_name}
             `;
+
+            // Fetch 5 sample rows
+            const sampleLogs = await sql`
+                SELECT * FROM "LiteLLM_SpendLogs" LIMIT 5
+            `;
+            return NextResponse.json({ tables, logsColumns, sampleLogs });
         }
 
         return NextResponse.json({ tables, logsColumns });
