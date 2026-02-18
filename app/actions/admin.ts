@@ -34,7 +34,15 @@ export async function getAllKeysWithDetails() {
         const detailsPromises = keyHashes.map(hash => getKeyInfo(hash));
         const details = await Promise.all(detailsPromises);
 
-        return details.filter(k => k !== null);
+        return keyHashes.map((hash, index) => {
+            const k = details[index];
+            if (!k) return null;
+            return {
+                ...k,
+                key: k.key || k.token || hash, // Ensure key is present
+                key_alias: k.key_alias || k.key_name
+            };
+        }).filter(k => k !== null);
     } catch (e) {
         console.error("Failed to fetch all keys:", e);
         return [];
