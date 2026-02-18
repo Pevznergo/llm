@@ -63,8 +63,26 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
             <div className={`grid gap-4 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
                 {filteredModels.map(model => {
                     const metadata = getModelMetadata(model.id);
-                    // Prefer metadata provider if available, else usage owned_by from API
-                    const provider = metadata.provider !== "Unknown" ? metadata.provider : (model.owned_by || "Unknown");
+                    // Prioritize API data, fallback to metadata, then defaults
+                    const provider = model.litellm_provider || model.owned_by || metadata.provider || "Unknown";
+
+                    // Format Prices
+                    const inputPrice = model.input_cost_per_token
+                        ? `$${(model.input_cost_per_token * 1000000).toFixed(2)}`
+                        : metadata.inputPrice;
+
+                    const outputPrice = model.output_cost_per_token
+                        ? `$${(model.output_cost_per_token * 1000000).toFixed(2)}`
+                        : metadata.outputPrice;
+
+                    // Format Context
+                    const contextLength = model.max_input_tokens
+                        ? `${(model.max_input_tokens / 1000).toFixed(0)}K`
+                        : metadata.contextLength;
+
+                    // Description is likely only in metadata manually
+                    const description = metadata.description || `Model hosted by ${provider}`;
+                    const displayName = metadata.displayName || model.id;
 
                     if (viewMode === "grid") {
                         return (
@@ -78,19 +96,19 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                                     </span>
                                 </div>
                                 <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1" title={model.id}>
-                                    {metadata.displayName}
+                                    {displayName}
                                 </h3>
                                 <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-3">
-                                    {metadata.description}
+                                    {description}
                                 </p>
                                 <div className="pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-500">
                                     <div>
                                         <span className="block text-gray-400 mb-1">Context</span>
-                                        {metadata.contextLength}
+                                        {contextLength}
                                     </div>
                                     <div className="text-right">
-                                        <span className="block text-gray-400 mb-1">Input / Output</span>
-                                        {metadata.inputPrice} / {metadata.outputPrice}
+                                        <span className="block text-gray-400 mb-1">Input / Output (1M)</span>
+                                        {inputPrice} / {outputPrice}
                                     </div>
                                 </div>
                             </div>
@@ -103,7 +121,7 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                             <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="text-lg font-semibold text-gray-900">{metadata.displayName}</h3>
+                                        <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
                                         <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">
                                             {model.id}
                                         </span>
@@ -112,21 +130,21 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                                         by <span className="font-medium text-gray-700">{provider}</span>
                                     </p>
                                     <p className="text-sm text-gray-600 max-w-3xl">
-                                        {metadata.description}
+                                        {description}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-8 text-sm text-gray-500 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
                                     <div>
                                         <div className="text-xs text-gray-400 mb-1">Context</div>
-                                        <div className="font-medium text-gray-900">{metadata.contextLength}</div>
+                                        <div className="font-medium text-gray-900">{contextLength}</div>
                                     </div>
                                     <div>
-                                        <div className="text-xs text-gray-400 mb-1">Input Price</div>
-                                        <div className="font-medium text-gray-900">{metadata.inputPrice}</div>
+                                        <div className="text-xs text-gray-400 mb-1">Input Price (1M)</div>
+                                        <div className="font-medium text-gray-900">{inputPrice}</div>
                                     </div>
                                     <div>
-                                        <div className="text-xs text-gray-400 mb-1">Output Price</div>
-                                        <div className="font-medium text-gray-900">{metadata.outputPrice}</div>
+                                        <div className="text-xs text-gray-400 mb-1">Output Price (1M)</div>
+                                        <div className="font-medium text-gray-900">{outputPrice}</div>
                                     </div>
                                 </div>
                             </div>

@@ -144,9 +144,41 @@ export interface LiteLLMModel {
     object: string;
     created: number;
     owned_by: string;
+    input_cost_per_token?: number;
+    output_cost_per_token?: number;
+    max_input_tokens?: number;
+    max_output_tokens?: number;
+    litellm_provider?: string;
 }
 
 export async function getModels(): Promise<LiteLLMModel[]> {
+    try {
+        // Try to fetch detailed info first using master key (requires LITELLM_MASTER_KEY in env)
+        const detailedResponse = await litellmFetch("/model/info");
+        const detailedData = detailedResponse.data || detailedResponse;
+
+        if (Array.isArray(detailedData)) {
+            return detailedData.map((m: any) => {
+                const info = m.model_info || {};
+                return {
+                    id: info.id || m.model_name,
+                    object: "model",
+                    created: 0,
+                    owned_by: info.litellm_provider || m.litellm_params?.custom_llm_provider || "unknown",
+                    // New fields
+                    input_cost_per_token: info.input_cost_per_token,
+                    output_cost_per_token: info.output_cost_per_token,
+                    max_input_tokens: info.max_input_tokens,
+                    max_output_tokens: info.max_output_tokens,
+                    litellm_provider: info.litellm_provider
+                };
+            });
+        }
+    } catch (e) {
+        console.warn("Failed to fetch detailed model info, falling back to basic list:", e);
+    }
+
+    // Fallback to basic list
     try {
         const data = await litellmFetch("/v1/models");
         const models = data.data || data || [];
