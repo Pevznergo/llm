@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon, Info } from "lucide-react";
+import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon, Info, Box } from "lucide-react";
 import { LiteLLMModel } from "@/lib/litellm";
+import { getModelMetadata } from "@/lib/model-data";
 
 interface ModelsPageProps {
     models: LiteLLMModel[];
@@ -14,11 +15,8 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
 
     const filteredModels = models.filter(m =>
         m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.owned_by.toLowerCase().includes(searchTerm.toLowerCase())
+        (m.owned_by && m.owned_by.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-
-    // Grouping logic? Or flat list? OpenRouter has flat list but grouped by provider visually sometimes.
-    // For now flat list.
 
     return (
         <div className="space-y-6">
@@ -40,7 +38,6 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                         />
                     </div>
 
-                    {/* Compare button placeholder */}
                     <button className="hidden md:flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700">
                         <SlidersHorizontal className="w-4 h-4" />
                         Compare
@@ -63,35 +60,79 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                 </div>
             </div>
 
-            <div className="grid gap-4">
-                {filteredModels.map(model => (
-                    <div key={model.id} className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-colors shadow-sm">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <h3 className="text-lg font-semibold text-gray-900">{model.id}</h3>
-                                    <button className="text-gray-400 hover:text-gray-600">
-                                        <Info className="w-4 h-4" />
-                                    </button>
+            <div className={`grid gap-4 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
+                {filteredModels.map(model => {
+                    const metadata = getModelMetadata(model.id);
+                    // Prefer metadata provider if available, else usage owned_by from API
+                    const provider = metadata.provider !== "Unknown" ? metadata.provider : (model.owned_by || "Unknown");
+
+                    if (viewMode === "grid") {
+                        return (
+                            <div key={model.id} className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-colors shadow-sm flex flex-col h-full">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="p-2 bg-gray-100 rounded-lg">
+                                        <Box className="w-5 h-5 text-gray-600" />
+                                    </div>
+                                    <span className="text-xs font-medium px-2 py-1 bg-gray-100 rounded-full text-gray-600">
+                                        {provider}
+                                    </span>
                                 </div>
-                                <p className="text-sm text-gray-500 mb-2">
-                                    by <span className="underline decoration-dotted">{model.owned_by}</span>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1" title={model.id}>
+                                    {metadata.displayName}
+                                </h3>
+                                <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-3">
+                                    {metadata.description}
                                 </p>
-                                {/* Description placeholder */}
-                                <p className="text-sm text-gray-600 line-clamp-2 max-w-3xl">
-                                    {/* Create generic description based on model name */}
-                                    This model is hosted by {model.owned_by}. It offers capabilities suitable for various tasks.
-                                </p>
+                                <div className="pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-500">
+                                    <div>
+                                        <span className="block text-gray-400 mb-1">Context</span>
+                                        {metadata.contextLength}
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="block text-gray-400 mb-1">Input / Output</span>
+                                        {metadata.inputPrice} / {metadata.outputPrice}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="text-right text-sm text-gray-500">
-                                {/* Placeholders for context/pricing since we don't have them in basic metadata */}
-                                <div>Context: Unknown</div>
-                                <div>Input: $?/1M</div>
-                                <div>Output: $?/1M</div>
+                        );
+                    }
+
+                    // List View
+                    return (
+                        <div key={model.id} className="group bg-white rounded-xl border border-gray-200 p-6 hover:border-gray-300 transition-colors shadow-sm">
+                            <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <h3 className="text-lg font-semibold text-gray-900">{metadata.displayName}</h3>
+                                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">
+                                            {model.id}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mb-2">
+                                        by <span className="font-medium text-gray-700">{provider}</span>
+                                    </p>
+                                    <p className="text-sm text-gray-600 max-w-3xl">
+                                        {metadata.description}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-8 text-sm text-gray-500 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
+                                    <div>
+                                        <div className="text-xs text-gray-400 mb-1">Context</div>
+                                        <div className="font-medium text-gray-900">{metadata.contextLength}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-gray-400 mb-1">Input Price</div>
+                                        <div className="font-medium text-gray-900">{metadata.inputPrice}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-gray-400 mb-1">Output Price</div>
+                                        <div className="font-medium text-gray-900">{metadata.outputPrice}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
 
                 {filteredModels.length === 0 && (
                     <div className="text-center py-12 text-gray-500">

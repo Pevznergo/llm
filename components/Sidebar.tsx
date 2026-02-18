@@ -12,7 +12,7 @@ import {
     CreditCard,
     Box
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,7 @@ const navigation = [
 
 export function Sidebar() {
     const pathname = usePathname();
+    const { data: session } = useSession();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     // Warning: Client-side session check for UI only. Server updates must verify email.
     // Ideally we pass user from layout, but for now we rely on hiding it via simple logic or user just knowing the link.
@@ -48,6 +49,7 @@ export function Sidebar() {
     // NOTE: In a real app, useSession() here to optionally render.
     // For now, I'll render it at the bottom distinctively.
 
+    const isAdmin = session?.user?.email === "pevznergo@gmail.com";
 
     return (
         <>
@@ -96,18 +98,20 @@ export function Sidebar() {
                         );
                     })}
 
-                    <div className="pt-4 mt-4 border-t border-gray-100">
-                        <Link
-                            href="/admin/users"
-                            className={cn(
-                                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-purple-600 hover:bg-purple-50",
-                                pathname === "/admin/users" ? "bg-purple-50" : ""
-                            )}
-                        >
-                            <Settings className="h-5 w-5" />
-                            Admin Panel
-                        </Link>
-                    </div>
+                    {isAdmin && (
+                        <div className="pt-4 mt-4 border-t border-gray-100">
+                            <Link
+                                href="/admin/users"
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-purple-600 hover:bg-purple-50",
+                                    pathname === "/admin/users" ? "bg-purple-50" : ""
+                                )}
+                            >
+                                <Settings className="h-5 w-5" />
+                                Admin Panel
+                            </Link>
+                        </div>
+                    )}
                 </nav>
 
                 {/* Footer / User */}
