@@ -9,7 +9,7 @@ import { LogOut, ArrowLeft } from "lucide-react";
 
 export default async function ModelsPage() {
     const session = await getServerSession(authOptions);
-    if (!session || !session.user || !session.user.email) return redirect("/api/auth/signin");
+    if (!session || !session.user || !session.user.email) return redirect("/login");
 
     const email = session.user.email;
     const models = await getModels();
