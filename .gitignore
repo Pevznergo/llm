@@ -76,3 +76,4 @@ certs/
 temp_litellm/
 tmp/
 *.tmp
+.env.production
