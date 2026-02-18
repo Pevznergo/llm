@@ -92,13 +92,29 @@ export async function listKeys(email: string): Promise<LiteLLMKey[]> {
     try {
         const data = await litellmFetch(`/key/list?user_id=${encodeURIComponent(email)}`);
         const keys = data.keys || data || [];
-        return Array.isArray(keys) ? keys.map((k: any) => ({
+
+        if (!Array.isArray(keys)) return [];
+
+        // If keys are strings (hashes), fetch details for each
+        if (keys.length > 0 && typeof keys[0] === 'string') {
+            const detailsPromises = keys.map(hash => getKeyInfo(hash));
+            const details = await Promise.all(detailsPromises);
+            return details.filter(k => k !== null).map((k: any) => ({
+                key_alias: k.key_alias || k.key_name,
+                key: k.key || k.token || "",
+                token: k.token,
+                spend: k.spend || 0,
+                max_budget: k.max_budget,
+            }));
+        }
+
+        return keys.map((k: any) => ({
             key_alias: k.key_alias || k.key_name,
             key: k.key || k.token || "",
             token: k.token,
             spend: k.spend || 0,
             max_budget: k.max_budget,
-        })) : [];
+        }));
     } catch {
         return [];
     }
