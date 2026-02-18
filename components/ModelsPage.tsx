@@ -63,8 +63,17 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
             <div className={`grid gap-4 ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"}`}>
                 {filteredModels.map(model => {
                     const metadata = getModelMetadata(model.id);
-                    // Prioritize API data, fallback to metadata, then defaults
-                    const provider = model.litellm_provider || model.owned_by || metadata.provider || "Unknown";
+                    // Provider Mapping
+                    const rawProvider = model.litellm_provider || model.owned_by || metadata.provider || "Unknown";
+                    const providerMap: Record<string, string> = {
+                        "gemini": "Google",
+                        "anthropic": "Anthropic",
+                        "openai": "OpenAI",
+                        "mistral": "Mistral",
+                        "meta": "Meta",
+                        "scira": "Scira" // based on user logs if any
+                    };
+                    const provider = providerMap[rawProvider.toLowerCase()] || rawProvider;
 
                     // Format Prices
                     const inputPrice = model.input_cost_per_token

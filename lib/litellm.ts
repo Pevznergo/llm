@@ -160,8 +160,11 @@ export async function getModels(): Promise<LiteLLMModel[]> {
         if (Array.isArray(detailedData)) {
             return detailedData.map((m: any) => {
                 const info = m.model_info || {};
+                // Use key or model_name as ID (human readable), fallback to info.id
+                const modelId = m.model_name || info.key || info.id;
+
                 return {
-                    id: info.id || m.model_name,
+                    id: modelId,
                     object: "model",
                     created: 0,
                     owned_by: info.litellm_provider || m.litellm_params?.custom_llm_provider || "unknown",
