@@ -14,18 +14,21 @@ export function AssignKeyForm({ apiKey, currentUserId }: AssignKeyFormProps) {
     const [email, setEmail] = useState(currentUserId || "");
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
+    const [error, setError] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        setError("");
         try {
             await assignKeyToUser(apiKey, email);
             setSuccess(true);
             setIsEditing(false);
             // Optional: refresh page data
             window.location.reload();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to assign key", error);
+            setError(error.message || "Failed to update");
         } finally {
             setLoading(false);
         }
@@ -47,29 +50,32 @@ export function AssignKeyForm({ apiKey, currentUserId }: AssignKeyFormProps) {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@email.com"
-                className="px-2 py-1 text-xs border rounded focus:outline-none focus:border-blue-500 w-40"
-                required
-            />
-            <button
-                type="submit"
-                disabled={loading}
-                className="p-1 bg-green-50 text-green-600 rounded hover:bg-green-100 disabled:opacity-50"
-            >
-                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            </button>
-            <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-            >
-                <X className="h-3 w-3" />
-            </button>
-        </form>
+        <div className="flex flex-col gap-1">
+            <form onSubmit={handleSubmit} className="flex items-center gap-2">
+                <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="user@email.com"
+                    className="px-2 py-1 text-xs border rounded focus:outline-none focus:border-blue-500 w-40"
+                    required
+                />
+                <button
+                    type="submit"
+                    disabled={loading}
+                    className="p-1 bg-green-50 text-green-600 rounded hover:bg-green-100 disabled:opacity-50"
+                >
+                    {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                >
+                    <X className="h-3 w-3" />
+                </button>
+            </form>
+            {error && <span className="text-red-500 text-xs">{error}</span>}
+        </div>
     );
 }
