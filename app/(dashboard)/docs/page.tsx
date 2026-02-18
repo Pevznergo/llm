@@ -58,6 +58,23 @@ export default function DocsPage() {
                 </p>
             </div>
 
+            {/* Environment Variables */}
+            <section className="p-6 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                    <Terminal className="w-5 h-5 text-gray-600" />
+                    <h2 className="text-xl font-bold text-gray-900">Environment Configuration (.env)</h2>
+                </div>
+                <p className="text-gray-600 mb-4 text-sm">
+                    Copy this into your project's <code>.env</code> file to configure standard SDKs automatically.
+                </p>
+                <CodeBlock
+                    language="bash"
+                    code={`OPENAI_API_BASE=${baseUrl}/v1
+OPENAI_BASE_URL=${baseUrl}/v1
+OPENAI_API_KEY=YOUR_APORTO_KEY`}
+                />
+            </section>
+
             {/* Steps Grid */}
             <div className="grid gap-8">
                 {/* Step 1 */}
@@ -192,6 +209,51 @@ main();`}
     "model": "${modelExample}",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`}
+                    />
+                </div>
+
+                {/* LangChain */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-purple-50 rounded-lg">
+                            <Code2 className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">LangChain (Python)</h3>
+                    </div>
+                    <CodeBlock
+                        language="python"
+                        code={`from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    openai_api_base="${baseUrl}/v1",
+    openai_api_key="YOUR_APORTO_KEY",
+    model_name="${modelExample}"
+)
+
+print(llm.invoke("Hello!"))`}
+                    />
+                </div>
+
+                {/* LlamaIndex */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-orange-50 rounded-lg">
+                            <Code2 className="w-5 h-5 text-orange-600" />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">LlamaIndex (Python)</h3>
+                    </div>
+                    <CodeBlock
+                        language="python"
+                        code={`from llama_index.llms.openai import OpenAI
+
+llm = OpenAI(
+    api_base="${baseUrl}/v1",
+    api_key="YOUR_APORTO_KEY",
+    model="${modelExample}"
+)
+
+resp = llm.complete("Hello!")
+print(resp)`}
                     />
                 </div>
             </div>
