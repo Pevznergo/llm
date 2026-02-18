@@ -19,18 +19,15 @@ export default async function ActivityPage() {
 
   const [user, keys, statsResult] = await Promise.all([userPromise, keysPromise, statsPromise]);
 
-  const { dailyStats = [], error } = statsResult;
-
-  // Calculate totals from stats if needed, or use user object
-  // Using user object for total life-time spend/requests is better if LiteLLM aggregates it.
-  // But charts need dailyStats.
+  const { chartData = [] } = statsResult;
 
   // Format stats for client component
-  const chartData = dailyStats.map((stat: any) => ({
+  // activity chart expects { date, spend, requests, tokens }
+  const formattedChartData = chartData.map((stat: any) => ({
     date: new Date(stat.date).toISOString(),
-    spend: Number(stat.spend),
-    requests: Number(stat.requests),
-    tokens: Number(stat.tokens)
+    spend: stat.spend,
+    requests: stat.count,
+    tokens: 0 // tokens not in getLogsStats yet, assuming 0 or add it
   }));
 
   // Use LiteLLM aggregated stats for the cards
@@ -87,12 +84,12 @@ export default async function ActivityPage() {
 
       {/* Charts Section */}
       <div>
-        {error ? (
-          <div className="bg-red-50 text-red-600 p-4 rounded-lg">
-            Error loading activity data: {error}
+        {chartData.length === 0 ? (
+          <div className="bg-gray-50 text-gray-500 p-4 rounded-lg text-center">
+            No activity data available
           </div>
         ) : (
-          <ActivityCharts data={chartData} />
+          <ActivityCharts data={formattedChartData} />
         )}
       </div>
     </div>
