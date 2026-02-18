@@ -147,3 +147,43 @@ export async function getDailyStats() {
     // Kept for backward compatibility if needed, but getLogsStats is better
     return getLogsStats();
 }
+
+export async function getModelUsageStats(startDate?: string, endDate?: string) {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.email) {
+        return { chartData: [] }; // No data for unidentified
+    }
+
+    const email = session.user.email;
+    const keys = await listKeys(email);
+    const keyHashes = keys.map(k => k.key).filter(Boolean);
+
+    if (keyHashes.length === 0) {
+        return { chartData: [] };
+    }
+
+    const end = endDate ? endOfDay(new Date(endDate)) : endOfDay(new Date());
+    const start = startDate ? startOfDay(new Date(startDate)) : startOfDay(subDays(end, 30)); // Default 30 days
+
+    try {
+        const stats = await sql`
+            SELECT 
+                DATE("startTime") as date,
+                model,
+                COUNT(*) as count,
+                SUM("spend") as spend,
+                SUM("total_tokens") as tokens
+            FROM "LiteLLM_SpendLogs"
+            WHERE api_key = ANY(${keyHashes})
+            AND "startTime" >= ${start.toISOString()}
+            AND "startTime" <= ${end.toISOString()}
+            GROUP BY DATE("startTime"), model
+            ORDER BY DATE("startTime") ASC
+        `;
+
+        return { chartData: stats };
+    } catch (error) {
+        console.error("Failed to fetch model stats:", error);
+        return { chartData: [] };
+    }
+}
