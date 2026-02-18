@@ -90,8 +90,8 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                         : metadata.contextLength;
 
                     // Description is likely only in metadata manually
-                    const description = metadata.description || `Model hosted by ${provider}`;
-                    const displayName = metadata.displayName || model.id;
+                    const description = model.description || metadata.description || `Model hosted by ${provider}`;
+                    const displayName = model.display_name || metadata.displayName || model.id;
 
                     if (viewMode === "grid") {
                         return (

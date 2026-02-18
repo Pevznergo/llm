@@ -149,9 +149,20 @@ export interface LiteLLMModel {
     max_input_tokens?: number;
     max_output_tokens?: number;
     litellm_provider?: string;
+    description?: string;
+    display_name?: string;
 }
 
+import { getModelDescriptions } from "@/lib/model-db";
+
 export async function getModels(): Promise<LiteLLMModel[]> {
+    let dbDescriptions: Record<string, any> = {};
+    try {
+        dbDescriptions = await getModelDescriptions();
+    } catch (e) {
+        // ignore
+    }
+
     try {
         // Try to fetch detailed info first using master key (requires LITELLM_MASTER_KEY in env)
         const detailedResponse = await litellmFetch("/model/info");
@@ -163,17 +174,23 @@ export async function getModels(): Promise<LiteLLMModel[]> {
                 // Use key or model_name as ID (human readable), fallback to info.id
                 const modelId = m.model_name || info.key || info.id;
 
+                const dbMeta = dbDescriptions[modelId] || {};
+
                 return {
                     id: modelId,
                     object: "model",
                     created: 0,
-                    owned_by: info.litellm_provider || m.litellm_params?.custom_llm_provider || "unknown",
+                    owned_by: dbMeta.provider_alias || info.litellm_provider || m.litellm_params?.custom_llm_provider || "unknown",
                     // New fields
                     input_cost_per_token: info.input_cost_per_token,
                     output_cost_per_token: info.output_cost_per_token,
                     max_input_tokens: info.max_input_tokens,
                     max_output_tokens: info.max_output_tokens,
-                    litellm_provider: info.litellm_provider
+                    litellm_provider: info.litellm_provider,
+
+                    // Extra DB fields
+                    description: dbMeta.description,
+                    display_name: dbMeta.display_name
                 };
             });
         }
@@ -185,12 +202,18 @@ export async function getModels(): Promise<LiteLLMModel[]> {
     try {
         const data = await litellmFetch("/v1/models");
         const models = data.data || data || [];
-        return Array.isArray(models) ? models.map((m: any) => ({
-            id: m.id || m.model_name,
-            object: m.object || "model",
-            created: m.created || 0,
-            owned_by: m.owned_by || "unknown",
-        })) : [];
+        return Array.isArray(models) ? models.map((m: any) => {
+            const modelId = m.id || m.model_name;
+            const dbMeta = dbDescriptions[modelId] || {};
+            return {
+                id: modelId,
+                object: m.object || "model",
+                created: m.created || 0,
+                owned_by: dbMeta.provider_alias || m.owned_by || "unknown",
+                description: dbMeta.description,
+                display_name: dbMeta.display_name
+            };
+        }) : [];
     } catch {
         return [];
     }
