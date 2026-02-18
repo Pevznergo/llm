@@ -99,13 +99,18 @@ export async function listKeys(email: string): Promise<LiteLLMKey[]> {
         if (keys.length > 0 && typeof keys[0] === 'string') {
             const detailsPromises = keys.map(hash => getKeyInfo(hash));
             const details = await Promise.all(detailsPromises);
-            return details.filter(k => k !== null).map((k: any) => ({
-                key_alias: k.key_alias || k.key_name,
-                key: k.key || k.token || "",
-                token: k.token,
-                spend: k.spend || 0,
-                max_budget: k.max_budget,
-            }));
+
+            return keys.map((hash: string, index: number) => {
+                const k = details[index];
+                if (!k) return null;
+                return {
+                    key_alias: k.key_alias || k.key_name,
+                    key: k.key || k.token || hash,
+                    token: k.token || hash,
+                    spend: k.spend || 0,
+                    max_budget: k.max_budget,
+                };
+            }).filter((item: any) => item !== null);
         }
 
         return keys.map((k: any) => ({
