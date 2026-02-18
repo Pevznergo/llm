@@ -63,13 +63,13 @@ export async function getUser(email: string): Promise<LiteLLMUser> {
                     body: JSON.stringify({
                         user_id: email,
                         user_email: email,
-                        max_budget: 10.0,
+                        max_budget: 1.0,
                     }),
                 });
                 return {
                     user_id: email,
                     email: email,
-                    max_budget: 10.0,
+                    max_budget: 1.0,
                     spend: 0,
                     request_count: 0,
                 };
@@ -81,7 +81,7 @@ export async function getUser(email: string): Promise<LiteLLMUser> {
         return {
             user_id: email,
             email: email,
-            max_budget: 10.0,
+            max_budget: 1.0,
             spend: 0,
             request_count: 0,
         };
