@@ -110,7 +110,7 @@ export async function listKeys(email: string): Promise<LiteLLMKey[]> {
                     spend: k.spend || 0,
                     max_budget: k.max_budget,
                 };
-            }).filter((item: any) => item !== null);
+            }).filter((item: any) => item !== null) as LiteLLMKey[];
         }
 
         return keys.map((k: any) => ({
