@@ -30,7 +30,7 @@ npm install
 Создайте файл `.env.local` в корне проекта и добавьте:
 
 ```env
-DATABASE_URL=postgresql://neondb_owner:npg_Pdsp2cZyj1zC@ep-twilight-truth-adopkfec-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=
 NEXTAUTH_SECRET=your-random-secret-key-here-change-this
 NEXTAUTH_URL=http://localhost:3000
 ```
