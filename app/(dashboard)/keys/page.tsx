@@ -47,7 +47,10 @@ export default async function KeysPage() {
                                                     {key.key_alias || "Unnamed Key"}
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-gray-600">
-                                                    {key.key.startsWith("sk-") ? key.key.substring(0, 20) + "..." : key.key.substring(0, 10) + "..."}
+                                                    {key.key.startsWith("sk-")
+                                                        ? `sk-...${key.key.slice(-4)}`
+                                                        : `${key.key.substring(0, 3)}...${key.key.slice(-4)}`
+                                                    }
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-600">
                                                     ${key.spend?.toFixed(4) || "0.0000"}
