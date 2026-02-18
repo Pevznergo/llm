@@ -8,7 +8,8 @@ import {
     Key,
     Settings,
     LogOut,
-    Menu
+    Menu,
+    CreditCard
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
@@ -19,7 +20,7 @@ const navigation = [
     { name: "Logs", href: "/logs", icon: FileText },
     { name: "API Keys", href: "/keys", icon: Key },
     // { name: "Admin Keys", href: "/admin/keys", icon: Settings }, // Temporary admin link -> hidden for client
-    { name: "Settings", href: "/settings", icon: Settings },
+    { name: "Credits", href: "/credits", icon: CreditCard },
 ];
 
 export function Sidebar() {
