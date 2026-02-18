@@ -1,12 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon, Info, Box } from "lucide-react";
+import { Search, SlidersHorizontal, LayoutGrid, List as ListIcon, Info, Box, Copy, Check } from "lucide-react";
 import { LiteLLMModel } from "@/lib/litellm";
 import { getModelMetadata } from "@/lib/model-data";
 
 interface ModelsPageProps {
     models: LiteLLMModel[];
+}
+
+function CopyButton({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <button
+            onClick={handleCopy}
+            className="p-1 hover:bg-gray-200 rounded transition-colors text-gray-500 hover:text-gray-700"
+            title="Copy model ID"
+        >
+            {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+        </button>
+    );
 }
 
 export default function ModelsPageClient({ models }: ModelsPageProps) {
@@ -71,7 +93,7 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                         "openai": "OpenAI",
                         "mistral": "Mistral",
                         "meta": "Meta",
-                        "scira": "Scira" // based on user logs if any
+                        "scira": "Scira"
                     };
                     const provider = providerMap[rawProvider.toLowerCase()] || rawProvider;
 
@@ -89,9 +111,22 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                         ? `${(model.max_input_tokens / 1000).toFixed(0)}K`
                         : metadata.contextLength;
 
-                    // Description is likely only in metadata manually
-                    const description = model.description || metadata.description || `Model hosted by ${provider}`;
+                    // Description REMOVED per user request
                     const displayName = model.display_name || metadata.displayName || model.id;
+
+                    // Copy handler
+                    const handleCopy = (e: React.MouseEvent, text: string) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        navigator.clipboard.writeText(text);
+                        // Visual feedback handled locally if we make this a component, 
+                        // but for now simple alert or just relying on hover? 
+                        // Better to make a small inline component or state.
+                        // Since we are mapping, we can't easily usage simple state without a component.
+                        // Let's usage a simpler approach: change icon briefly?
+                        // Actually, let's extract a small row component or usage a data attribute?
+                        // No, let's just make a CopyButton component inside.
+                    };
 
                     if (viewMode === "grid") {
                         return (
@@ -107,10 +142,16 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                                 <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1" title={model.id}>
                                     {displayName}
                                 </h3>
-                                <p className="text-sm text-gray-500 mb-4 flex-grow line-clamp-3">
-                                    {description}
-                                </p>
-                                <div className="pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-500">
+
+                                {/* API Model ID + Copy */}
+                                <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500 font-mono line-clamp-1 break-all">
+                                        {model.id}
+                                    </span>
+                                    <CopyButton text={model.id} />
+                                </div>
+
+                                <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between text-xs text-gray-500">
                                     <div>
                                         <span className="block text-gray-400 mb-1">Context</span>
                                         {contextLength}
@@ -131,15 +172,13 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-1">
                                         <h3 className="text-lg font-semibold text-gray-900">{displayName}</h3>
-                                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">
+                                        <span className="flex items-center gap-1 text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-500 font-mono">
                                             {model.id}
+                                            <CopyButton text={model.id} />
                                         </span>
                                     </div>
                                     <p className="text-sm text-gray-500 mb-2">
                                         by <span className="font-medium text-gray-700">{provider}</span>
-                                    </p>
-                                    <p className="text-sm text-gray-600 max-w-3xl">
-                                        {description}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-8 text-sm text-gray-500 w-full md:w-auto mt-4 md:mt-0 pt-4 md:pt-0 border-t md:border-t-0 border-gray-100">
