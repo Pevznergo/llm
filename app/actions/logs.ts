@@ -10,7 +10,7 @@ import { eachDayOfInterval, format, subDays, startOfDay, endOfDay } from "date-f
 export async function getRequestLogs(page = 1, limit = 50, startDate?: string, endDate?: string) {
     const session = await getServerSession(authOptions);
     if (!session || !session.user?.email) {
-        return { error: "Unauthorized" };
+        return { logs: [], total: 0, totalPages: 0, error: "Unauthorized" };
     }
 
     const email = session.user.email;
