@@ -9,7 +9,7 @@ export async function GET() {
             WHERE table_schema = 'public'
         `;
 
-        let logsColumns = [];
+        let logsColumns: any[] = [];
         const logsTable = tables.find((t: any) => t.table_name === 'LiteLLM_SpendLogs' || t.table_name === 'spend_logs');
 
         if (logsTable) {
