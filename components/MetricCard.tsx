@@ -29,11 +29,23 @@ export function MetricCard({ title, value, data, dataKey, modelColors, formatter
     const topModels = sortedModels.slice(0, 5);
     const otherValue = sortedModels.slice(5).reduce((acc, output) => acc + modelTotals[output], 0);
 
-    if (otherValue > 0) {
-        // We generally don't show "Others" in the stacked bar keys usually, 
-        // strictly speaking we should only stack keys that exist.
-        // For simplicity, we'll just stack all models in the chart.
-    }
+    // Prepare data with "Other" aggregated for the chart
+    const enhancedData = data.map(day => {
+        const newDay = { ...day };
+        let dayOtherTotal = 0;
+
+        // Sum up non-top models for this day
+        Object.keys(day).forEach(key => {
+            if (key !== "date" && !topModels.includes(key) && key !== "Other") {
+                dayOtherTotal += (day[key]?.[dataKey] || 0);
+            }
+        });
+
+        if (dayOtherTotal > 0) {
+            newDay["Other"] = { [dataKey]: dayOtherTotal };
+        }
+        return newDay;
+    });
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
@@ -44,21 +56,28 @@ export function MetricCard({ title, value, data, dataKey, modelColors, formatter
 
             <div className="h-48 w-full mb-6">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} barCategoryGap={2}>
+                    <BarChart data={enhancedData} barCategoryGap={2} barSize={12}>
                         {/* 
-                           We need to stack bars by model.
-                           But since specific models vary per day, we need to list ALL possible models as Bars.
-                           Recharts ignores keys missing in data.
+                           Stack top models + Others
                         */}
-                        {sortedModels.map((model) => (
+                        {topModels.map((model) => (
                             <Bar
                                 key={model}
                                 dataKey={`${model}.${dataKey}`}
                                 stackId="a"
                                 fill={modelColors[model] || "#E5E7EB"}
-                                radius={[2, 2, 0, 0]}
+                                radius={[0, 0, 0, 0]} // No radius for stacked segments except top? Recharts handles this weirdly.
                             />
                         ))}
+                        {otherValue > 0 && (
+                            <Bar
+                                key="Others"
+                                dataKey={`Other.${dataKey}`}
+                                stackId="a"
+                                fill="#E5E7EB"
+                                radius={[2, 2, 0, 0]} // Top radius for the last one
+                            />
+                        )}
                     </BarChart>
                 </ResponsiveContainer>
             </div>

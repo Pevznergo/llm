@@ -1,15 +1,63 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MetricCard } from "./MetricCard";
 import { ChevronDown, Settings } from "lucide-react";
+import { subDays, subMonths, format, startOfToday } from "date-fns";
 
 interface ActivityDashboardProps {
     initialStats: any[]; // Raw stats from DB
 }
 
 export function ActivityDashboard({ initialStats }: ActivityDashboardProps) {
-    const [timeRange, setTimeRange] = useState("1 Month");
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Determine initial label based on URL or default
+    const getInitialLabel = () => {
+        const start = searchParams.get("startDate");
+        if (!start) return "1 Month";
+        const today = new Date();
+        const startDate = new Date(start);
+        const diffTime = Math.abs(today.getTime() - startDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays <= 7) return "1 Week";
+        if (diffDays <= 32) return "1 Month";
+        if (diffDays <= 92) return "3 Months";
+        return "Custom";
+    };
+
+    const [timeRange, setTimeRange] = useState(getInitialLabel());
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    const handleRangeChange = (range: string) => {
+        setTimeRange(range);
+        setIsFilterOpen(false);
+
+        const today = startOfToday();
+        let start;
+
+        switch (range) {
+            case "1 Week":
+                start = subDays(today, 7);
+                break;
+            case "1 Month":
+                start = subMonths(today, 1);
+                break;
+            case "3 Months":
+                start = subMonths(today, 3);
+                break;
+            default:
+                start = subMonths(today, 1);
+        }
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("startDate", format(start, "yyyy-MM-dd"));
+        params.set("endDate", format(today, "yyyy-MM-dd"));
+        router.push("?" + params.toString());
+    };
 
     // Process data for charts
     // Structure: [{ date: '2023-01-01', 'gpt-4': { spend: 0.1, count: 2, tokens: 100 }, 'claude-2': { ... } }]
@@ -89,9 +137,28 @@ export function ActivityDashboard({ initialStats }: ActivityDashboardProps) {
                         <span className="w-4 h-4"><Settings className="w-4 h-4" /></span>
                         <span>Filters</span>
                     </div>
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm cursor-pointer hover:bg-gray-50 min-w-[120px]">
-                        <span>{timeRange}</span>
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                    <div className="relative">
+                        <div
+                            className="flex items-center justify-between px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm cursor-pointer hover:bg-gray-50 min-w-[120px]"
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                        >
+                            <span>{timeRange}</span>
+                            <ChevronDown className="w-4 h-4 text-gray-400" />
+                        </div>
+
+                        {isFilterOpen && (
+                            <div className="absolute right-0 mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-1">
+                                {["1 Week", "1 Month", "3 Months"].map((range) => (
+                                    <div
+                                        key={range}
+                                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+                                        onClick={() => handleRangeChange(range)}
+                                    >
+                                        {range}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
