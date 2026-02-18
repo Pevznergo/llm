@@ -221,3 +221,17 @@ export async function updateUser(user_id: string, updates: any): Promise<any> {
         throw new Error(e.message);
     }
 }
+
+export async function deleteKey(key: string): Promise<any> {
+    try {
+        const data = await litellmFetch("/key/delete", {
+            method: "POST",
+            body: JSON.stringify({
+                keys: [key]
+            })
+        });
+        return data;
+    } catch (e: any) {
+        throw new Error(e.message);
+    }
+}
