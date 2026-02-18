@@ -15,14 +15,9 @@ export async function GET() {
             WHERE table_name = 'LiteLLM_VerificationToken'
         `;
 
-        // Debug: Fetch keys for a test user
-        const { listKeys } = await import("@/lib/litellm");
-        const debugKeys = await listKeys("test@example.com");
-
         return NextResponse.json({
             tables: tables.map(t => t.table_name),
-            tokenColumns,
-            debugKeys
+            tokenColumns
         });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
