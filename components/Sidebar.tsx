@@ -9,7 +9,8 @@ import {
     Settings,
     LogOut,
     Menu,
-    CreditCard
+    CreditCard,
+    Box
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
     { name: "Activity", href: "/", icon: Activity },
     { name: "Logs", href: "/logs", icon: FileText },
+    { name: "Models", href: "/models", icon: Box },
     { name: "API Keys", href: "/keys", icon: Key },
     // { name: "Admin Keys", href: "/admin/keys", icon: Settings }, // Temporary admin link -> hidden for client
     { name: "Credits", href: "/credits", icon: CreditCard },
