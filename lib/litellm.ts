@@ -139,3 +139,28 @@ export async function getModels(): Promise<LiteLLMModel[]> {
         return [];
     }
 }
+// ... existing code ...
+
+export async function getKeyInfo(key: string): Promise<any> {
+    try {
+        const data = await litellmFetch(`/key/info?key=${key}`);
+        return data.info || data;
+    } catch {
+        return null;
+    }
+}
+
+export async function updateKey(key: string, updates: any): Promise<any> {
+    try {
+        const data = await litellmFetch("/key/update", {
+            method: "POST",
+            body: JSON.stringify({
+                key: key,
+                ...updates
+            })
+        });
+        return data;
+    } catch (e: any) {
+        throw new Error(e.message);
+    }
+}
