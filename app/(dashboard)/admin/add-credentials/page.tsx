@@ -14,6 +14,9 @@ export default function AddCredentialsPage() {
     const [creating, setCreating] = useState(false);
     const [results, setResults] = useState<any[]>([]);
 
+    const [apiBase, setApiBase] = useState("");
+    const [customProvider, setCustomProvider] = useState("");
+
     useEffect(() => {
         getTemplateModels().then((models) => {
             setTemplates(models);
@@ -23,13 +26,6 @@ export default function AddCredentialsPage() {
 
     const keyList = keys.split("\n").filter(k => k.trim() !== "");
 
-    // Preview generation
-    // In a real app we might want server-side preview if logic is complex, 
-    // but here we just show what we WILL send.
-    // The exact names are generated on server to ensure uniqueness/randomness, 
-    // so we can't fully preview exact names here without a roundtrip, 
-    // but we can show the count and structure.
-
     const handleCreate = async () => {
         if (!selectedTemplate || keyList.length === 0) return;
 
@@ -37,7 +33,10 @@ export default function AddCredentialsPage() {
         setResults([]);
 
         try {
-            const res = await bulkCreateModels(provider, keyList, selectedTemplate);
+            const res = await bulkCreateModels(provider, keyList, selectedTemplate, {
+                apiBase: apiBase.trim() || undefined,
+                customProvider: customProvider.trim() || undefined
+            });
             if (res.success && res.results) {
                 setResults(res.results);
                 if (res.results.every((r: any) => r.status === 'created')) {
@@ -65,21 +64,49 @@ export default function AddCredentialsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Left Column: Input */}
                 <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Provider
+                            </label>
+                            <select
+                                value={provider}
+                                onChange={(e) => setProvider(e.target.value)}
+                                className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
+                            >
+                                <option value="openai">OpenAI</option>
+                                <option value="azure">Azure OpenAI</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="mistral">Mistral</option>
+                                <option value="custom">Custom Provider</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Custom Provider Name
+                            </label>
+                            <input
+                                type="text"
+                                value={customProvider}
+                                onChange={(e) => setCustomProvider(e.target.value)}
+                                placeholder="e.g. together_ai"
+                                className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Provider
+                            API Base / Proxy URL
                         </label>
-                        <select
-                            value={provider}
-                            onChange={(e) => setProvider(e.target.value)}
+                        <input
+                            type="text"
+                            value={apiBase}
+                            onChange={(e) => setApiBase(e.target.value)}
+                            placeholder="https://api.openai.com/v1"
                             className="w-full p-2.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow outline-none"
-                        >
-                            <option value="openai">OpenAI</option>
-                            <option value="azure">Azure OpenAI</option>
-                            <option value="anthropic">Anthropic</option>
-                            <option value="gemini">Google Gemini</option>
-                            <option value="mistral">Mistral</option>
-                        </select>
+                        />
                     </div>
 
                     <div>

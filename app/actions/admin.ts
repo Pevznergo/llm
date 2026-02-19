@@ -29,7 +29,11 @@ export async function getTemplateModels() {
 export async function bulkCreateModels(
     provider: string,
     keys: string[],
-    templateModelId: string
+    templateModelId: string,
+    options?: {
+        apiBase?: string;
+        customProvider?: string;
+    }
 ) {
     await checkAdmin();
 
@@ -47,41 +51,32 @@ export async function bulkCreateModels(
     for (const key of keys) {
         if (!key.trim()) continue;
 
-        // Generate a unique suffix or name. 
-        // Simple strategy: append first 4 chars of key to avoid full key exposure in name if we were to usage it,
-        // but better to usage random suffix or just counter if keys are identical? 
-        // User didn't specify, but usually one model per key means we need distinct IDs.
-        // Let's usage a random suffix for uniqueness.
         const suffix = Math.random().toString(36).substring(2, 7);
         const newModelName = `${template.id}-copy-${suffix}`;
 
         try {
-            // Construct new model config
-            // We use the template's params but override the key.
             const baseParams = template.litellm_params || {};
-
-            // If template doesn't have params, we can't clone safely.
-            // But if it's a proxy model, it MUST have params linking to a provider.
-
             const newParams = { ...baseParams };
 
-            // Inject the key based on provider
-            // Common param for key is 'api_key' but some providers usage env vars.
-            // We'll set 'api_key' in params as it overrides env vars usually.
             if (key.trim()) {
                 newParams.api_key = key.trim();
             }
 
-            // Ensure model name in destination is set
-            // If we are cloning a proxy model, `model` param usually points to the upstream identifier (e.g. gpt-4)
-            // We keep that.
+            if (options?.apiBase) {
+                newParams.api_base = options.apiBase;
+            }
+
+            if (options?.customProvider) {
+                // If custom provider is set, we might need it in the 'model' string or custom_llm_provider
+                newParams.custom_llm_provider = options.customProvider;
+            }
 
             const newModelConfig = {
                 model_name: newModelName,
                 litellm_params: newParams,
                 model_info: {
                     id: newModelName,
-                    db_model: true // Persistence
+                    db_model: true
                 }
             };
 

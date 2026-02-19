@@ -100,7 +100,7 @@ export function Sidebar() {
                     })}
 
                     {isAdmin && (
-                        <div className="pt-4 mt-4 border-t border-gray-100">
+                        <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-1">
                             <Link
                                 href="/admin/users"
                                 className={cn(
@@ -109,7 +109,17 @@ export function Sidebar() {
                                 )}
                             >
                                 <Settings className="h-5 w-5" />
-                                Admin Panel
+                                Admin Users
+                            </Link>
+                            <Link
+                                href="/admin/add-credentials"
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-blue-600 hover:bg-blue-50",
+                                    pathname === "/admin/add-credentials" ? "bg-blue-50" : ""
+                                )}
+                            >
+                                <Key className="h-5 w-5" />
+                                Add Credentials
                             </Link>
                         </div>
                     )}
