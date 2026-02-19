@@ -136,7 +136,9 @@ export async function assignKeyToUser(key: string, user_id: string) {
         await updateKey(key, { user_id: user_id });
         revalidatePath("/admin/keys");
         return { success: true };
-    } catch (e: any) {
-        return { success: false, error: e.message };
-    }
-}
+
+        export async function getAllUsers() {
+            await checkAdmin();
+            const { listUsers } = await import("@/lib/litellm");
+            return await listUsers();
+        }
