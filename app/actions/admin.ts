@@ -98,3 +98,45 @@ export async function bulkCreateModels(
     revalidatePath("/models");
     return { success: true, results };
 }
+
+export async function getAllKeysWithDetails() {
+    await checkAdmin();
+    // LiteLLM doesn't have a simple "list ALL keys" for all users in one go via standard client often,
+    // but the /key/list without user_id might work if Master Key is used.
+    // Let's try listing for the admin first, or list all users then all keys.
+    // lib/litellm.ts `listKeys` takes email.
+
+    // Strategy: List all users, then fetch keys for each.
+    const { listUsers, listKeys } = await import("@/lib/litellm");
+    const users = await listUsers();
+
+    let allKeys: any[] = [];
+
+    // Parallel fetch
+    // Limit concurrency if needed, but for now simple promise.all
+    const userKeyPromises = users.map(u => listKeys(u.user_id).catch(() => []));
+    const results = await Promise.all(userKeyPromises);
+
+    results.forEach(keys => {
+        if (Array.isArray(keys)) {
+            allKeys = [...allKeys, ...keys];
+        }
+    });
+
+    // Also fetch keys for "empty" user if possible? 
+    // Usually keys are attached to users.
+
+    return allKeys;
+}
+
+export async function assignKeyToUser(key: string, user_id: string) {
+    await checkAdmin();
+    try {
+        const { updateKey } = await import("@/lib/litellm");
+        await updateKey(key, { user_id: user_id });
+        revalidatePath("/admin/keys");
+        return { success: true };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
