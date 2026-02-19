@@ -143,6 +143,11 @@ export async function assignKeyToUser(key: string, user_id: string) {
 
 export async function getAllUsers() {
     await checkAdmin();
-    const { listUsers } = await import("@/lib/litellm");
-    return await listUsers();
+    try {
+        const { listUsers } = await import("@/lib/litellm");
+        const users = await listUsers();
+        return { users, error: undefined };
+    } catch (e: any) {
+        return { users: [], error: e.message };
+    }
 }
