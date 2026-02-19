@@ -151,6 +151,7 @@ export interface LiteLLMModel {
     litellm_provider?: string;
     description?: string;
     display_name?: string;
+    litellm_params?: any;
 }
 
 import { getModelDescriptions } from "@/lib/model-db";
@@ -186,7 +187,9 @@ export async function getModels(): Promise<LiteLLMModel[]> {
                     output_cost_per_token: info.output_cost_per_token,
                     max_input_tokens: info.max_input_tokens,
                     max_output_tokens: info.max_output_tokens,
+
                     litellm_provider: info.litellm_provider,
+                    litellm_params: m.litellm_params,
 
                     // Extra DB fields
                     description: dbMeta.description,
@@ -280,6 +283,7 @@ export async function updateUser(user_id: string, updates: any): Promise<any> {
     }
 }
 
+
 export async function deleteKey(key: string): Promise<any> {
     try {
         const data = await litellmFetch("/key/delete", {
@@ -287,6 +291,18 @@ export async function deleteKey(key: string): Promise<any> {
             body: JSON.stringify({
                 keys: [key]
             })
+        });
+        return data;
+    } catch (e: any) {
+        throw new Error(e.message);
+    }
+}
+
+export async function createModel(modelConfig: any): Promise<any> {
+    try {
+        const data = await litellmFetch("/model/new", {
+            method: "POST",
+            body: JSON.stringify(modelConfig)
         });
         return data;
     } catch (e: any) {

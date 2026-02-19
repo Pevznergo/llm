@@ -44,6 +44,7 @@ export function Sidebar() {
     const adminNavigation = [
         ...navigation,
         { name: "Admin Users", href: "/admin/users", icon: Settings }, // Reusing Settings icon for Admin
+        { name: "Add Credentials", href: "/admin/add-credentials", icon: Key }, // New link
     ];
 
     // NOTE: In a real app, useSession() here to optionally render.

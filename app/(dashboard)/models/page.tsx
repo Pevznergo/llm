@@ -10,9 +10,17 @@ export default async function ModelsPage() {
 
     const models = await getModels();
 
+    // Deduplicate models by ID
+    const uniqueModelsMap = new Map();
+    models.forEach(m => {
+        if (!uniqueModelsMap.has(m.id)) {
+            uniqueModelsMap.set(m.id, m);
+        }
+    });
+
     // Sort models roughly? Or trust API order.
     // Let's sort alphabetically by id
-    const sortedModels = models.sort((a, b) => a.id.localeCompare(b.id));
+    const sortedModels = Array.from(uniqueModelsMap.values()).sort((a: any, b: any) => a.id.localeCompare(b.id));
 
     return <ModelsPageClient models={sortedModels} />;
 }

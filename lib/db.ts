@@ -160,7 +160,7 @@ export async function initDatabase() {
       await sql`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS free_images_count INTEGER DEFAULT 0`;
 
       // Cleanup: drop duplicate telegram_id column if it was created before
-      await sql`ALTER TABLE "User" DROP COLUMN IF EXISTS telegram_id`;
+      // await sql`ALTER TABLE "User" DROP COLUMN IF EXISTS telegram_id`;
     } catch (e) {
       console.warn("User table extension warning:", e);
     }

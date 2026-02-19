@@ -35,7 +35,12 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
     const [searchTerm, setSearchTerm] = useState("");
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
-    const filteredModels = models.filter(m =>
+    // Deduplicate models by ID
+    const uniqueModels = models.filter((model, index, self) =>
+        index === self.findIndex((t) => t.id === model.id)
+    );
+
+    const filteredModels = uniqueModels.filter(m =>
         m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (m.owned_by && m.owned_by.toLowerCase().includes(searchTerm.toLowerCase()))
     );
