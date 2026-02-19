@@ -13,6 +13,7 @@ import {
     AlertCircle, List, Map as MapIcon, Globe, Printer, Play,
     Clipboard as ClipboardIcon, Plus, Gift, Edit, RefreshCcw, RefreshCw, BarChart as BarChartIcon, Megaphone
 } from "lucide-react";
+import Image from "next/image";
 import QRCodeLib from "qrcode";
 import dynamic from "next/dynamic";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
@@ -29,7 +30,7 @@ const QrCodeDisplay = ({ value, size = 128 }: { value: string, size?: number }) 
 
     if (!dataUrl) return <div style={{ width: size, height: size }} className="bg-white/5 animate-pulse rounded-xl" />;
 
-    return <img src={dataUrl} alt="QR Code" style={{ width: size, height: size }} className="rounded-xl bg-white p-2" />;
+    return <Image src={dataUrl} alt="QR Code" width={size} height={size} className="rounded-xl bg-white p-2" unoptimized />;
 };
 
 
@@ -2151,13 +2152,17 @@ export default function NextClient({ initialLinks, initialEcosystems }: NextClie
                                             <td className="p-5">
                                                 <div className="flex items-center gap-3">
                                                     {prize.image_url ? (
-                                                        <img
+                                                        <Image
                                                             src={prize.image_url}
                                                             alt={prize.name}
+                                                            width={40}
+                                                            height={40}
                                                             className="w-10 h-10 object-cover rounded-lg bg-slate-800"
+                                                            unoptimized
                                                             onError={(e) => {
-                                                                e.currentTarget.style.display = 'none';
-                                                                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                                                                const target = e.currentTarget as HTMLImageElement;
+                                                                target.style.display = 'none';
+                                                                target.nextElementSibling?.classList.remove('hidden');
                                                             }}
                                                         />
                                                     ) : null}
@@ -2867,10 +2872,13 @@ export default function NextClient({ initialLinks, initialEcosystems }: NextClie
                                     <div className="flex flex-col gap-2">
                                         {(prizeForm.image_url || prizeForm.file) && (
                                             <div className="relative w-full h-32 bg-slate-950 rounded-xl overflow-hidden border border-white/10">
-                                                <img
+                                                <Image
                                                     src={prizeForm.file ? URL.createObjectURL(prizeForm.file) : prizeForm.image_url}
                                                     alt="Preview"
+                                                    width={200}
+                                                    height={128}
                                                     className="w-full h-full object-contain"
+                                                    unoptimized
                                                 />
                                             </div>
                                         )}

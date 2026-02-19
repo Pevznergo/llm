@@ -2,7 +2,7 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getModels, createModel, LiteLLMModel } from "@/lib/litellm";
+import { getModels, createModel, LiteLLMModel, updateUser, getUser } from "@/lib/litellm";
 import { revalidatePath } from "next/cache";
 
 // Admin check helper
@@ -149,5 +149,29 @@ export async function getAllUsers() {
         return { users, error: undefined };
     } catch (e: any) {
         return { users: [], error: e.message };
+    }
+}
+
+export async function updateUserFunds(
+    email: string,
+    amount: number,
+    operation: "add" | "set" | "subtract"
+) {
+    await checkAdmin();
+    try {
+        let newBudget = amount;
+
+        if (operation === "add" || operation === "subtract") {
+            const user = await getUser(email);
+            const currentBudget = user.max_budget || 0;
+            newBudget = operation === "add" ? currentBudget + amount : currentBudget - amount;
+        }
+
+        await updateUser(email, { max_budget: newBudget });
+        revalidatePath("/admin/users");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to update user funds:", e);
+        return { success: false, error: e.message };
     }
 }

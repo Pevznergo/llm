@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { X, Plus, Trash2, Loader2, Check, Pencil } from 'lucide-react'
 
 interface Tariff {
@@ -38,14 +38,7 @@ export default function AdminTariffModal({ isOpen, onClose, partner }: AdminTari
         billing_period: 'monthly'
     })
 
-    useEffect(() => {
-        if (isOpen && partner) {
-            fetchTariffs()
-            resetForm()
-        }
-    }, [isOpen, partner])
-
-    const fetchTariffs = async () => {
+    const fetchTariffs = useCallback(async () => {
         setLoading(true)
         try {
             const res = await fetch('/api/admin/tariffs')
@@ -57,9 +50,9 @@ export default function AdminTariffModal({ isOpen, onClose, partner }: AdminTari
         } finally {
             setLoading(false)
         }
-    }
+    }, [partner.id])
 
-    const resetForm = () => {
+    const resetForm = useCallback(() => {
         setFormData({
             name: '',
             price: '',
@@ -68,7 +61,14 @@ export default function AdminTariffModal({ isOpen, onClose, partner }: AdminTari
             billing_period: 'monthly'
         })
         setEditingTariff(null)
-    }
+    }, [])
+
+    useEffect(() => {
+        if (isOpen && partner) {
+            fetchTariffs()
+            resetForm()
+        }
+    }, [isOpen, partner, fetchTariffs, resetForm])
 
     const handleEdit = (tariff: Tariff) => {
         setEditingTariff(tariff)
