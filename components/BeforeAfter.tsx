@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 
 interface BeforeAfterProps {
   title: string
@@ -49,22 +50,24 @@ export default function BeforeAfter({ title, description, beforeImage, afterImag
         onClick={handleClick}
       >
         <div className="absolute inset-0 bg-gray-200">
-          <img
+          <Image
             src={afterImage}
             alt="After"
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
             draggable={false}
           />
         </div>
-        
+
         <div
           className="absolute inset-0 bg-gray-300"
           style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
         >
-          <img
+          <Image
             src={beforeImage}
             alt="Before"
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
             draggable={false}
           />
         </div>
@@ -76,10 +79,10 @@ export default function BeforeAfter({ title, description, beforeImage, afterImag
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-xl flex items-center justify-center border-4 border-white">
             <div className="flex space-x-1">
               <svg width="8" height="16" viewBox="0 0 8 16" fill="none">
-                <path d="M0 8L4 4V12L0 8Z" fill="#6366f1"/>
+                <path d="M0 8L4 4V12L0 8Z" fill="#6366f1" />
               </svg>
               <svg width="8" height="16" viewBox="0 0 8 16" fill="none">
-                <path d="M8 8L4 4V12L8 8Z" fill="#6366f1"/>
+                <path d="M8 8L4 4V12L8 8Z" fill="#6366f1" />
               </svg>
             </div>
           </div>

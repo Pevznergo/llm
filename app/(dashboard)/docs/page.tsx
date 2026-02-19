@@ -65,7 +65,7 @@ export default function DocsPage() {
                     <h2 className="text-xl font-bold text-gray-900">Environment Configuration (.env)</h2>
                 </div>
                 <p className="text-gray-600 mb-4 text-sm">
-                    Copy this into your project's <code>.env</code> file to configure standard SDKs automatically.
+                    Copy this into your project&apos;s <code>.env</code> file to configure standard SDKs automatically.
                 </p>
                 <CodeBlock
                     language="bash"
@@ -124,7 +124,7 @@ OPENAI_API_KEY=YOUR_APORTO_KEY`}
                         <h2 className="text-2xl font-bold text-gray-900">Choose a Model</h2>
                     </div>
                     <p className="text-gray-600 mb-4">
-                        Browse the <a href="/models" className="text-blue-600 font-semibold hover:underline">Models</a> page to see available providers and prices. Use the "Copy" button to get the exact model ID.
+                        Browse the <a href="/models" className="text-blue-600 font-semibold hover:underline">Models</a> page to see available providers and prices. Use the &quot;Copy&quot; button to get the exact model ID.
                     </p>
                 </section>
             </div>

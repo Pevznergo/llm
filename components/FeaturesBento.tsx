@@ -43,7 +43,7 @@ export default function FeaturesBento() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center max-w-3xl mx-auto mb-16">
                     <h2 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4">
-                        We handle the conflicts <br />you don't have time for.
+                        We handle the conflicts <br />you don&apos;t have time for.
                     </h2>
                     <p className="text-lg text-slate-600">
                         Our AI agents are trained on legal frameworks and negotiation tactics to get you results.
@@ -65,7 +65,7 @@ export default function FeaturesBento() {
                                         <span key={i} className="text-2xl">★</span>
                                     ))}
                                 </div>
-                                <p className="text-slate-400 text-sm italic line-through">"Worst service ever..."</p>
+                                <p className="text-slate-400 text-sm italic line-through">&quot;Worst service ever...&quot;</p>
                             </div>
 
                             <motion.div

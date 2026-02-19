@@ -1683,7 +1683,7 @@ export default function NextClient({ initialLinks, initialEcosystems }: NextClie
                                                 Следующий чат ({nextTask?.title?.split(',')[0]}...): <span className="text-indigo-400 font-mono">{countdown}</span>
                                             </div>
                                         )}
-                                        <p className="text-slate-400">Чат "{result.title}" успешно создан.</p>
+                                        <p className="text-slate-400">Чат &quot;{result.title}&quot; успешно создан.</p>
                                     </div>
 
                                     <div className="flex flex-wrap gap-3">
@@ -2129,7 +2129,7 @@ export default function NextClient({ initialLinks, initialEcosystems }: NextClie
                         <div className="p-8 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl text-center space-y-4">
                             <Gift className="w-16 h-16 text-slate-500 mx-auto" />
                             <h3 className="text-xl font-semibold text-white">Призы пока не созданы</h3>
-                            <p className="text-slate-400">Нажмите "Создать приз", чтобы добавить первый приз для розыгрыша.</p>
+                            <p className="text-slate-400">Нажмите &quot;Создать приз&quot;, чтобы добавить первый приз для розыгрыша.</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto rounded-3xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm shadow-2xl">

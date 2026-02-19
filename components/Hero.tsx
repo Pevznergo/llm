@@ -98,8 +98,8 @@ export default function Hero() {
                                             key={m}
                                             onClick={() => setActiveModel(m)}
                                             className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${activeModel === m
-                                                    ? 'bg-slate-900 text-white shadow-md'
-                                                    : 'bg-white text-slate-500 hover:bg-slate-100'
+                                                ? 'bg-slate-900 text-white shadow-md'
+                                                : 'bg-white text-slate-500 hover:bg-slate-100'
                                                 }`}
                                         >
                                             {m}
@@ -131,7 +131,7 @@ export default function Hero() {
                                         Claude 3.5 Sonnet часто показывает себя лучше в написании кода благодаря:
                                         <ul className="list-disc list-inside mt-2 space-y-1 text-slate-600">
                                             <li>Более актуальным знаниям библиотек.</li>
-                                            <li>меньшему количеству "галлюцинаций".</li>
+                                            <li>меньшему количеству &quot;галлюцинаций&quot;.</li>
                                             <li>Способности лучше удерживать контекст больших файлов.</li>
                                         </ul>
                                     </div>

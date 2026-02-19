@@ -28,7 +28,7 @@ export default function SecurityTrust() {
                                     <ShieldCheck className="w-6 h-6" />
                                 </div>
                                 <h3 className="font-semibold text-white">Stripe Secure Payment</h3>
-                                <p className="text-sm">We don't store card details. Payments are processed securely via Stripe.</p>
+                                <p className="text-sm">We don&apos;t store card details. Payments are processed securely via Stripe.</p>
                             </div>
 
                             <div className="flex flex-col items-center gap-3">

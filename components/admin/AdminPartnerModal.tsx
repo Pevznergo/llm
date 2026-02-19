@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Loader2, Save } from 'lucide-react'
+import Image from 'next/image'
 
 export interface Partner {
     id: number
@@ -163,7 +164,7 @@ export default function AdminPartnerModal({ isOpen, onClose, partner, onSave }: 
                             <div className="space-y-3">
                                 {formData.logo && (
                                     <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-gray-200 shadow-sm group">
-                                        <img src={formData.logo} alt="Preview" className="w-full h-full object-cover" />
+                                        <Image src={formData.logo} alt="Preview" fill className="object-cover" />
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, logo: '' })}

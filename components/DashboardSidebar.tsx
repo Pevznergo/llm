@@ -3,6 +3,7 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Plus, Search, LogOut, FileText, CheckCircle, Clock } from 'lucide-react';
 import { useState } from 'react';
 
@@ -57,7 +58,7 @@ export default function DashboardSidebar() {
                 <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 transition-colors group cursor-pointer">
                     <div className="flex items-center gap-3">
                         {session?.user?.image ? (
-                            <img src={session.user.image} alt="User" className="w-9 h-9 rounded-full border border-slate-100" />
+                            <Image src={session.user.image} alt="User" width={36} height={36} className="rounded-full border border-slate-100" />
                         ) : (
                             <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
                                 {session?.user?.name?.[0] || 'U'}

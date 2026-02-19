@@ -42,7 +42,7 @@ export default function BookingModal({ isOpen, onClose }: BookingModalProps) {
 
                     <h4 className="text-2xl font-bold text-white mb-3">Schedule Your Call</h4>
                     <p className="text-gray-400 max-w-md mb-8">
-                        Select a time that works best for you. We'll discuss how Aporto can help you recover lost revenue.
+                        Select a time that works best for you. We&apos;ll discuss how Aporto can help you recover lost revenue.
                     </p>
 
                     <a

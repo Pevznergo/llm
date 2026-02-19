@@ -207,7 +207,7 @@ export default function ModelsPageClient({ models }: ModelsPageProps) {
 
                 {filteredModels.length === 0 && (
                     <div className="text-center py-12 text-gray-500">
-                        No models found matching "{searchTerm}"
+                        No models found matching &quot;{searchTerm}&quot;
                     </div>
                 )}
             </div>

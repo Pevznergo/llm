@@ -56,7 +56,7 @@ export default function HowItWorks() {
 
                         <div className="relative z-10 bg-white/10 backdrop-blur-xl rounded-[1.5rem] p-5 border border-white/20 w-full md:w-64">
                             <div className="text-[10px] font-mono text-white/90 leading-relaxed">
-                                "Violation: Google Policy 4.2<br />Content: Conflict of Interest<br />Action: Remove"
+                                &quot;Violation: Google Policy 4.2<br />Content: Conflict of Interest<br />Action: Remove&quot;
                             </div>
                         </div>
                     </div>
