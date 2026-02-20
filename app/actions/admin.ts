@@ -469,11 +469,10 @@ export async function getKeyUsageStats() {
     try {
         const client = await getLitellmDb().connect();
         try {
-            // Group usage by api_key and model
+            // Group usage by upstream provider and model
             const usageResult = await client.query(`
                 SELECT 
-                    api_key, 
-                    MAX(metadata->>'user_api_key_alias') as key_alias,
+                    COALESCE(NULLIF(custom_llm_provider, ''), SPLIT_PART(model, '/', 1)) as provider_name,
                     model, 
                     SUM(total_tokens) as total_tokens,
                     SUM(prompt_tokens) as prompt_tokens,
@@ -481,28 +480,26 @@ export async function getKeyUsageStats() {
                 FROM "LiteLLM_SpendLogs"
                 WHERE api_key != 'litellm-internal-health-check'
                   AND status = 'success'
-                GROUP BY api_key, model
-                ORDER BY key_alias, model
+                GROUP BY COALESCE(NULLIF(custom_llm_provider, ''), SPLIT_PART(model, '/', 1)), model
+                ORDER BY provider_name, model
             `);
 
             // Transform into a cleaner nested structure:
-            // [ { keyHash, keyAlias, models: [ { modelName, total_tokens, ... } ] } ]
+            // [ { providerName, models: [ { modelName, total_tokens, ... } ] } ]
             const groupedMap = new Map<string, any>();
 
             for (const row of usageResult.rows) {
-                const keyHash = row.api_key || 'unknown';
-                const keyAlias = row.key_alias || 'Unnamed Key';
+                const providerName = row.provider_name || 'unknown';
                 const modelName = row.model || 'unknown';
 
-                if (!groupedMap.has(keyHash)) {
-                    groupedMap.set(keyHash, {
-                        keyHash,
-                        keyAlias,
+                if (!groupedMap.has(providerName)) {
+                    groupedMap.set(providerName, {
+                        providerName,
                         models: []
                     });
                 }
 
-                groupedMap.get(keyHash).models.push({
+                groupedMap.get(providerName).models.push({
                     modelName,
                     total_tokens: parseInt(row.total_tokens) || 0,
                     prompt_tokens: parseInt(row.prompt_tokens) || 0,

@@ -55,30 +55,30 @@ export default function KeyUsageClient() {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {stats.map((keyGroup, index) => {
+                    {stats.map((providerGroup, index) => {
                         // Calculate totals for the group
-                        const totalKeyTokens = keyGroup.models.reduce((sum: number, m: any) => sum + m.total_tokens, 0);
+                        const totalProviderTokens = providerGroup.models.reduce((sum: number, m: any) => sum + m.total_tokens, 0);
 
                         return (
-                            <div key={keyGroup.keyHash || index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md">
-                                {/* Header for the Key Group */}
+                            <div key={providerGroup.providerName || index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md">
+                                {/* Header for the Provider Group */}
                                 <div className="bg-gray-50 border-b border-gray-200 p-4 flex justify-between items-center">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-100 rounded-lg">
-                                            <KeyRound className="w-5 h-5 text-blue-700" />
+                                        <div className="p-2 bg-purple-100 rounded-lg">
+                                            <BarChart3 className="w-5 h-5 text-purple-700" />
                                         </div>
                                         <div>
-                                            <h2 className="text-lg font-bold text-gray-900">{keyGroup.keyAlias}</h2>
-                                            <p className="text-xs text-gray-500 font-mono">Hash: {keyGroup.keyHash.substring(0, 12)}...</p>
+                                            <h2 className="text-lg font-bold text-gray-900 uppercase tracking-wide">{providerGroup.providerName}</h2>
+                                            <p className="text-xs text-gray-500 font-mono">Upstream Provider Metrics</p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Tokens</p>
-                                        <p className="text-lg font-bold text-gray-900">{formatNumber(totalKeyTokens)}</p>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Provider Tokens</p>
+                                        <p className="text-lg font-bold text-gray-900">{formatNumber(totalProviderTokens)}</p>
                                     </div>
                                 </div>
 
-                                {/* Table of Model Usage for this Key */}
+                                {/* Table of Model Usage for this Provider */}
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left text-sm">
                                         <thead className="bg-gray-50/50 text-gray-600 font-medium">
@@ -90,7 +90,7 @@ export default function KeyUsageClient() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {keyGroup.models.map((model: any, mIdx: number) => (
+                                            {providerGroup.models.map((model: any, mIdx: number) => (
                                                 <tr key={mIdx} className="hover:bg-blue-50/30 transition-colors">
                                                     <td className="px-6 py-3 font-mono text-gray-800">{model.modelName}</td>
                                                     <td className="px-6 py-3 text-right text-gray-600">{formatNumber(model.prompt_tokens)}</td>
