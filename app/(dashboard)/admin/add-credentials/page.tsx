@@ -77,12 +77,12 @@ export default function AddCredentialsPage() {
         setManagingCreds(false);
     };
 
-    const handleDeleteCredential = async (id: number) => {
+    const handleDeleteCredential = async (id: string) => {
         if (!confirm("Delete this provider credential?")) return;
         setManagingCreds(true);
         const res = await deleteProviderCredential(id);
         if (res.success) {
-            if (selectedCredId === String(id)) setSelectedCredId("");
+            if (selectedCredId === id) setSelectedCredId("");
             await fetchData();
         } else {
             alert("Error: " + res.error);
@@ -95,7 +95,7 @@ export default function AddCredentialsPage() {
         setManagingTemplates(true);
 
         const activeProvider = selectedCredId
-            ? credentials.find(c => c.id === Number(selectedCredId))?.provider
+            ? credentials.find(c => c.id === selectedCredId)?.provider
             : credProvider;
 
         const res = await addModelTemplate(newTemplateName.trim(), activeProvider || 'custom');
@@ -138,12 +138,12 @@ export default function AddCredentialsPage() {
             .map(t => t.template_name);
 
         // Find which provider the selected cred belongs to, so we can tag the model properly
-        const selectedCred = credentials.find(c => c.id === Number(selectedCredId));
+        const selectedCred = credentials.find(c => c.id === selectedCredId);
         const providerName = selectedCred ? selectedCred.provider : credProvider;
 
         try {
             const res = await bulkCreateModels(
-                Number(selectedCredId),
+                selectedCredId,
                 selectedNames,
                 providerName
             );
@@ -164,7 +164,7 @@ export default function AddCredentialsPage() {
 
     // Derived variables
     const activeProviderForTemplates = selectedCredId
-        ? credentials.find(c => c.id === Number(selectedCredId))?.provider
+        ? credentials.find(c => c.id === selectedCredId)?.provider
         : credProvider;
 
     const currentProviderTemplates = templates.filter(t => t.provider === activeProviderForTemplates || t.provider === 'all');

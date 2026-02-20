@@ -3,7 +3,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getModels, createModel, LiteLLMModel, updateUser, getUser, deleteModel, listKeys } from "@/lib/litellm";
-import { sql } from "@/lib/db";
+import { sql, initDatabase } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 // Admin check helper
@@ -68,17 +68,49 @@ export async function deleteModelTemplate(id: number) {
 
 // ---- Provider Credentials Management ----
 
+// Helper for connecting to the LiteLLM database (Supabase)
+import { Pool } from 'pg';
+let litellmPool: Pool | undefined;
+const getLitellmDb = () => {
+    if (!litellmPool) {
+        litellmPool = new Pool({
+            connectionString: process.env.DATABASE_URL, // This points to Supabase where LiteLLM_CredentialsTable is
+            ssl: { rejectUnauthorized: false }
+        });
+    }
+    return litellmPool;
+};
+
 export async function getProviderCredentials() {
     await checkAdmin();
     try {
-        const credentials = await sql`SELECT id, provider, alias, created_at FROM provider_credentials ORDER BY created_at DESC`;
-        // Intentionally not returning the raw api_key to the frontend for security, except maybe masked if needed.
-        return { success: true, credentials };
+        const client = await getLitellmDb().connect();
+        try {
+            // Fetch all credentials from the LiteLLM native table. 
+            // We return them as { id, provider, alias, created_at } to match the frontend shape.
+            const result = await client.query(`SELECT credential_id, credential_name, created_at FROM "LiteLLM_CredentialsTable" ORDER BY created_at DESC`);
+
+            const credentials = result.rows.map(row => {
+                // We stored provider in the name using format "alias (provider)" or just map to "api_key" for now.
+                // We'll parse the alias out.
+                return {
+                    id: row.credential_id,
+                    alias: row.credential_name,
+                    provider: 'native', // The UI can just show 'native' or we can extract it if we save it specially.
+                    created_at: row.created_at
+                }
+            });
+            return { success: true, credentials };
+        } finally {
+            client.release();
+        }
     } catch (e: any) {
         console.error("Failed to fetch provider credentials:", e);
         return { success: false, error: e.message, credentials: [] };
     }
 }
+
+import { v4 as uuidv4 } from 'uuid';
 
 export async function addProviderCredential(provider: string, alias: string, apiKey: string) {
     await checkAdmin();
@@ -86,24 +118,41 @@ export async function addProviderCredential(provider: string, alias: string, api
         return { success: false, error: "Provider, alias, and API key are required." };
     }
     try {
-        await sql`
-            INSERT INTO provider_credentials (provider, alias, api_key) 
-            VALUES (${provider}, ${alias}, ${apiKey})
-        `;
-        revalidatePath("/admin/add-credentials");
-        return { success: true };
+        const client = await getLitellmDb().connect();
+        try {
+            const credential_id = uuidv4();
+            const credential_name = `${alias} (${provider})`;
+            // LiteLLM stores the actual secret in credential_values as {"api_key": "..."} usually, or custom formats.
+            // Using standard python dict as JSONB
+            const credential_values = JSON.stringify({ "api_key": apiKey });
+
+            await client.query(`
+                INSERT INTO "LiteLLM_CredentialsTable" (credential_id, credential_name, credential_values, created_at, updated_at) 
+                VALUES ($1, $2, $3, NOW(), NOW())
+            `, [credential_id, credential_name, credential_values]);
+
+            revalidatePath("/admin/add-credentials");
+            return { success: true };
+        } finally {
+            client.release();
+        }
     } catch (e: any) {
         console.error("Failed to add provider credential:", e);
         return { success: false, error: e.message };
     }
 }
 
-export async function deleteProviderCredential(id: number) {
+export async function deleteProviderCredential(id: string) {
     await checkAdmin();
     try {
-        await sql`DELETE FROM provider_credentials WHERE id = ${id}`;
-        revalidatePath("/admin/add-credentials");
-        return { success: true };
+        const client = await getLitellmDb().connect();
+        try {
+            await client.query(`DELETE FROM "LiteLLM_CredentialsTable" WHERE credential_id = $1`, [id]);
+            revalidatePath("/admin/add-credentials");
+            return { success: true };
+        } finally {
+            client.release();
+        }
     } catch (e: any) {
         console.error("Failed to delete provider credential:", e);
         return { success: false, error: e.message };
@@ -111,7 +160,7 @@ export async function deleteProviderCredential(id: number) {
 }
 
 export async function bulkCreateModels(
-    credentialId: number,
+    credentialId: string, // now a UUID string
     templateNames: string[],
     provider: string,
     apiBase?: string
@@ -122,12 +171,23 @@ export async function bulkCreateModels(
         return { success: false, error: "Source credential and templates are required" };
     }
 
-    // Fetch the raw API key from DB
-    const credRows = await sql`SELECT api_key FROM provider_credentials WHERE id = ${credentialId}`;
-    if (credRows.length === 0) {
-        return { success: false, error: "Provider credential not found in database." };
+    // Fetch the raw API key from LiteLLM DB
+    let rawApiKey = "";
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            const result = await client.query(`SELECT credential_values FROM "LiteLLM_CredentialsTable" WHERE credential_id = $1`, [credentialId]);
+            if (result.rows.length === 0) {
+                return { success: false, error: "Provider credential not found in LiteLLM DB." };
+            }
+            const vals = result.rows[0].credential_values;
+            rawApiKey = vals.api_key || vals.OPENAI_API_KEY || vals.GEMINI_API_KEY || Object.values(vals)[0] || "";
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        return { success: false, error: "Failed to read credential from DB: " + e.message };
     }
-    const rawApiKey = credRows[0].api_key;
 
     const results = [];
 

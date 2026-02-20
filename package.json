@@ -48,6 +48,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/recharts": "^1.8.29",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.0",
     "baseline-browser-mapping": "^2.9.11",
     "eslint": "^8.0.0",

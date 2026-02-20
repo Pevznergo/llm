@@ -274,17 +274,6 @@ export async function initDatabase() {
       )
     `;
 
-    // Provider Credentials table (New)
-    await sql`
-      CREATE TABLE IF NOT EXISTS provider_credentials (
-        id SERIAL PRIMARY KEY,
-        provider VARCHAR(255) NOT NULL,
-        alias VARCHAR(255) NOT NULL,
-        api_key VARCHAR(512) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-
     // Market Ads table (New)
     await sql`
       CREATE TABLE IF NOT EXISTS market_ads (
