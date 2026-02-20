@@ -66,35 +66,68 @@ export async function deleteModelTemplate(id: number) {
     }
 }
 
+// ---- Provider Credentials Management ----
+
+export async function getProviderCredentials() {
+    await checkAdmin();
+    try {
+        const credentials = await sql`SELECT id, provider, alias, created_at FROM provider_credentials ORDER BY created_at DESC`;
+        // Intentionally not returning the raw api_key to the frontend for security, except maybe masked if needed.
+        return { success: true, credentials };
+    } catch (e: any) {
+        console.error("Failed to fetch provider credentials:", e);
+        return { success: false, error: e.message, credentials: [] };
+    }
+}
+
+export async function addProviderCredential(provider: string, alias: string, apiKey: string) {
+    await checkAdmin();
+    if (!provider || !alias || !apiKey) {
+        return { success: false, error: "Provider, alias, and API key are required." };
+    }
+    try {
+        await sql`
+            INSERT INTO provider_credentials (provider, alias, api_key) 
+            VALUES (${provider}, ${alias}, ${apiKey})
+        `;
+        revalidatePath("/admin/add-credentials");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to add provider credential:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteProviderCredential(id: number) {
+    await checkAdmin();
+    try {
+        await sql`DELETE FROM provider_credentials WHERE id = ${id}`;
+        revalidatePath("/admin/add-credentials");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to delete provider credential:", e);
+        return { success: false, error: e.message };
+    }
+}
+
 export async function bulkCreateModels(
-    sourceKeyHash: string,
+    credentialId: number,
     templateNames: string[],
     provider: string,
     apiBase?: string
 ) {
     await checkAdmin();
 
-    if (!sourceKeyHash || !templateNames.length) {
-        return { success: false, error: "Source key and templates are required" };
+    if (!credentialId || !templateNames.length) {
+        return { success: false, error: "Source credential and templates are required" };
     }
 
-    // Since we are using an existing key from proxy, we need its token string.
-    // However, the hash from listKeys might just be the hash, not the usable sk-... token if it's masked. 
-    // Usually, creating models requires the raw key OR LiteLLM allows using the hash? No, LiteLLM /model/new needs the real api_key,
-    // OR it might just be routing. 
-    // Wait, you want to use the API KEY string itself, so the UI must pass the raw API Key, 
-    // or if the UI dropdown only has hashes, we can't extract the original `sk-...` from the proxy. 
-    // Let's assume the user selects a key from the dropdown and we pass the known token.
-    // If we only have the alias/hash, Litellm doesn't let you see the full key again.
-    // *Wait*, if they select a Master Key, they can't extract the API key from it to create a model. 
-    // LiteLLM models need the provider's API key (e.g. OpenAI sk-...). 
-    // LiteLLM Keys (user keys) are for accessing the proxy, not the provider.
-    // If the "selected credential" means the PROVIDER'S API Key, then it should be an input field,
-    // OR if it's stored in LiteLLM DB as a key?
-    // Let's modify this to take `rawApiKey: string` instead of `sourceKeyHash` because to create a model in Litellm, you need the backend Provider API Key.
-
-    // Correction: the action signature will take `rawApiKey`. If the user is selecting a key from LiteLLM UI, it might be a model.
-    // If they want to use a proxy key... proxy keys don't work like that for models usually, unless litellm has a feature for it.
+    // Fetch the raw API key from DB
+    const credRows = await sql`SELECT api_key FROM provider_credentials WHERE id = ${credentialId}`;
+    if (credRows.length === 0) {
+        return { success: false, error: "Provider credential not found in database." };
+    }
+    const rawApiKey = credRows[0].api_key;
 
     const results = [];
 
@@ -104,8 +137,8 @@ export async function bulkCreateModels(
 
         try {
             const newParams: any = {};
-            if (sourceKeyHash.trim()) {
-                newParams.api_key = sourceKeyHash.trim(); // Assume sourceKeyHash is the raw API Key sent from the client
+            if (rawApiKey.trim()) {
+                newParams.api_key = rawApiKey.trim();
             }
             if (apiBase?.trim()) {
                 newParams.api_base = apiBase.trim();
@@ -187,8 +220,39 @@ export async function getAllUsers() {
     await checkAdmin();
     try {
         const { listUsers } = await import("@/lib/litellm");
-        const users = await listUsers();
-        return { users, error: undefined };
+        const llmUsers = await listUsers();
+
+        // Fetch users from local DB
+        const pgUsers = await sql`SELECT * FROM "User"`;
+
+        // Merge them
+        const userMap = new Map();
+
+        // Add LiteLLM users first
+        llmUsers.forEach(u => {
+            userMap.set(u.email, u);
+        });
+
+        // Add PG users if they don't exist and enrich existing ones with names
+        pgUsers.forEach((pu: any) => {
+            if (!userMap.has(pu.email)) {
+                userMap.set(pu.email, {
+                    user_id: pu.email,
+                    email: pu.email,
+                    name: pu.name,
+                    max_budget: 1.0, // Default baseline matching LiteLLM defaults
+                    spend: 0,
+                    request_count: 0,
+                });
+            } else {
+                const existing = userMap.get(pu.email);
+                existing.name = pu.name || existing.name;
+            }
+        });
+
+        const mergedUsers = Array.from(userMap.values());
+
+        return { users: mergedUsers, error: undefined };
     } catch (e: any) {
         return { users: [], error: e.message };
     }
