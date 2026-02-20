@@ -250,6 +250,14 @@ export async function bulkCreateModels(
             // Assign the credential name explicitly
             newParams.litellm_credential_name = credentialAlias;
 
+            // Sanitize floats that might be passed as scientific notation strings (e.g. "1.00e-07") from templates
+            if (newParams.input_cost_per_token !== undefined) {
+                newParams.input_cost_per_token = parseFloat(Number(newParams.input_cost_per_token).toFixed(10));
+            }
+            if (newParams.output_cost_per_token !== undefined) {
+                newParams.output_cost_per_token = parseFloat(Number(newParams.output_cost_per_token).toFixed(10));
+            }
+
             if (rawApiKey.trim()) {
                 newParams.api_key = rawApiKey.trim();
             }
