@@ -477,25 +477,27 @@ export async function getKeyUsageStats() {
     try {
         const client = await getLitellmDb().connect();
         try {
-            // Group usage by specific Upstream Credential extracted from model tags
+            // Group usage by specific Upstream Credential extracted from model tags via JOIN
             const usageResult = await client.query(`
                 SELECT 
                     COALESCE(
                         (
                             SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
-                            FROM jsonb_array_elements_text(request_tags) as tag 
+                            FROM jsonb_array_elements_text(m.litellm_params->'tags') as tag 
                             WHERE tag LIKE 'provider_key:%' 
                             LIMIT 1
                         ),
                         'Untagged / Legacy Models'
                     ) as credential_alias,
-                    model, 
-                    SUM(total_tokens) as total_tokens,
-                    SUM(prompt_tokens) as prompt_tokens,
-                    SUM(completion_tokens) as completion_tokens
-                FROM "LiteLLM_SpendLogs"
-                WHERE api_key != 'litellm-internal-health-check'
-                  AND status = 'success'
+                    s.model, 
+                    SUM(s.total_tokens) as total_tokens,
+                    SUM(s.prompt_tokens) as prompt_tokens,
+                    SUM(s.completion_tokens) as completion_tokens
+                FROM "LiteLLM_SpendLogs" s
+                LEFT JOIN "LiteLLM_ProxyModelTable" m 
+                    ON m.model_name = COALESCE(NULLIF((s.metadata->'model_map_information'->'model_map_value'->>'key'), ''), s.model)
+                WHERE s.api_key != 'litellm-internal-health-check'
+                  AND s.status = 'success'
                 GROUP BY 1, 2
                 ORDER BY 1, 2
             `);
