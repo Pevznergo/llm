@@ -13,8 +13,8 @@ export const checkAdmin = async () => {
         throw new Error("Unauthorized");
     }
 
-    // Only igordash1@gmail.com is admin
-    if (session.user.email !== "igordash1@gmail.com") {
+    const adminEmails = ["pevznergo@gmail.com", "igordash1@gmail.com"];
+    if (!adminEmails.includes(session.user.email)) {
         throw new Error("Forbidden: Admin access only");
     }
 };

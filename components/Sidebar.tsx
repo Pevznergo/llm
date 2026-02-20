@@ -50,7 +50,7 @@ export function Sidebar() {
     // NOTE: In a real app, useSession() here to optionally render.
     // For now, I'll render it at the bottom distinctively.
 
-    const isAdmin = session?.user?.email === "pevznergo@gmail.com";
+    const isAdmin = ["pevznergo@gmail.com", "igordash1@gmail.com"].includes(session?.user?.email || "");
 
     return (
         <>
