@@ -532,8 +532,17 @@ export async function getKeyUsageStats() {
             const usageResult = await client.query(`
                 SELECT 
                     COALESCE(
-                        c.credential_name,          -- The user friendly alias
-                        m.litellm_params->>'litellm_credential_name', -- Raw credential ID if dangling
+                        (
+                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
+                            FROM jsonb_array_elements_text(
+                                CASE WHEN jsonb_typeof(m.litellm_params->'tags') = 'array' 
+                                     THEN m.litellm_params->'tags' 
+                                     ELSE '[]'::jsonb 
+                                END
+                            ) as tag 
+                            WHERE tag LIKE 'provider_key:%' 
+                            LIMIT 1
+                        ),
                         'Untagged / Legacy Models'
                     ) as credential_alias,
                     s.model,
@@ -545,8 +554,6 @@ export async function getKeyUsageStats() {
                 FROM "LiteLLM_SpendLogs" s
                 LEFT JOIN "LiteLLM_ProxyModelTable" m 
                     ON m.model_info->>'id' = s.model_id
-                LEFT JOIN "LiteLLM_CredentialsTable" c
-                    ON c.credential_id = m.litellm_params->>'litellm_credential_name'
                 LEFT JOIN admin_key_usage_model_costs mc 
                     ON mc.model_name = s.model
                 WHERE s.api_key != 'litellm-internal-health-check'
