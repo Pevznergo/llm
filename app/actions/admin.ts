@@ -2,7 +2,8 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getModels, createModel, LiteLLMModel, updateUser, getUser, deleteModel } from "@/lib/litellm";
+import { getModels, createModel, LiteLLMModel, updateUser, getUser, deleteModel, listKeys } from "@/lib/litellm";
+import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 // Admin check helper
@@ -26,66 +27,112 @@ export async function getTemplateModels() {
     }
 }
 
-export async function bulkCreateModels(
-    provider: string,
-    keys: string[],
-    templateModelId: string,
-    options?: {
-        apiBase?: string;
-        customProvider?: string;
+export async function getModelTemplates() {
+    await checkAdmin();
+    try {
+        const templates = await sql`SELECT * FROM model_templates ORDER BY created_at DESC`;
+        return { success: true, templates };
+    } catch (e: any) {
+        console.error("Failed to fetch model templates:", e);
+        return { success: false, error: e.message, templates: [] };
     }
+}
+
+export async function addModelTemplate(templateName: string, provider: string) {
+    await checkAdmin();
+    try {
+        await sql`
+            INSERT INTO model_templates (template_name, provider) 
+            VALUES (${templateName}, ${provider})
+            ON CONFLICT (template_name) DO NOTHING
+        `;
+        revalidatePath("/admin/add-credentials");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to add model template:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteModelTemplate(id: number) {
+    await checkAdmin();
+    try {
+        await sql`DELETE FROM model_templates WHERE id = ${id}`;
+        revalidatePath("/admin/add-credentials");
+        return { success: true };
+    } catch (e: any) {
+        console.error("Failed to delete model template:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function bulkCreateModels(
+    sourceKeyHash: string,
+    templateNames: string[],
+    provider: string,
+    apiBase?: string
 ) {
     await checkAdmin();
 
-    // 1. Fetch template details
-    const models = await getModels();
-    const template = models.find(m => m.id === templateModelId);
-
-    if (!template) {
-        return { success: false, error: "Template model not found" };
+    if (!sourceKeyHash || !templateNames.length) {
+        return { success: false, error: "Source key and templates are required" };
     }
+
+    // Since we are using an existing key from proxy, we need its token string.
+    // However, the hash from listKeys might just be the hash, not the usable sk-... token if it's masked. 
+    // Usually, creating models requires the raw key OR LiteLLM allows using the hash? No, LiteLLM /model/new needs the real api_key,
+    // OR it might just be routing. 
+    // Wait, you want to use the API KEY string itself, so the UI must pass the raw API Key, 
+    // or if the UI dropdown only has hashes, we can't extract the original `sk-...` from the proxy. 
+    // Let's assume the user selects a key from the dropdown and we pass the known token.
+    // If we only have the alias/hash, Litellm doesn't let you see the full key again.
+    // *Wait*, if they select a Master Key, they can't extract the API key from it to create a model. 
+    // LiteLLM models need the provider's API key (e.g. OpenAI sk-...). 
+    // LiteLLM Keys (user keys) are for accessing the proxy, not the provider.
+    // If the "selected credential" means the PROVIDER'S API Key, then it should be an input field,
+    // OR if it's stored in LiteLLM DB as a key?
+    // Let's modify this to take `rawApiKey: string` instead of `sourceKeyHash` because to create a model in Litellm, you need the backend Provider API Key.
+
+    // Correction: the action signature will take `rawApiKey`. If the user is selecting a key from LiteLLM UI, it might be a model.
+    // If they want to use a proxy key... proxy keys don't work like that for models usually, unless litellm has a feature for it.
 
     const results = [];
 
-    // 2. Iterate and create
-    for (const key of keys) {
-        if (!key.trim()) continue;
-
-        const suffix = Math.random().toString(36).substring(2, 7);
-        const newModelName = `${template.id}-copy-${suffix}`;
+    // Iterate and create
+    for (const templateName of templateNames) {
+        if (!templateName.trim()) continue;
 
         try {
-            const baseParams = template.litellm_params || {};
-            const newParams = { ...baseParams };
-
-            if (key.trim()) {
-                newParams.api_key = key.trim();
+            const newParams: any = {};
+            if (sourceKeyHash.trim()) {
+                newParams.api_key = sourceKeyHash.trim(); // Assume sourceKeyHash is the raw API Key sent from the client
+            }
+            if (apiBase?.trim()) {
+                newParams.api_base = apiBase.trim();
             }
 
-            if (options?.apiBase) {
-                newParams.api_base = options.apiBase;
-            }
-
-            if (options?.customProvider) {
-                // If custom provider is set, we might need it in the 'model' string or custom_llm_provider
-                newParams.custom_llm_provider = options.customProvider;
+            // Set custom provider if it's custom. Otherwise litellm implies it from model_name prefix.
+            if (provider === 'custom') {
+                newParams.custom_llm_provider = "custom";
+            } else {
+                newParams.default_provider = provider;
             }
 
             const newModelConfig = {
-                model_name: newModelName,
+                model_name: templateName,
                 litellm_params: newParams,
                 model_info: {
-                    id: newModelName,
+                    id: templateName,
                     db_model: true
                 }
             };
 
             await createModel(newModelConfig);
-            results.push({ name: newModelName, status: "created" });
+            results.push({ name: templateName, status: "created" });
 
         } catch (e: any) {
-            console.error(`Failed to create model for key ${key.substring(0, 5)}...`, e);
-            results.push({ name: newModelName, status: "failed", error: e.message });
+            console.error(`Failed to create model ${templateName}...`, e);
+            results.push({ name: templateName, status: "failed", error: e.message });
         }
     }
 

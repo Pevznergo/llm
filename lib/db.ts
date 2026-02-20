@@ -264,6 +264,16 @@ export async function initDatabase() {
       `;
     }
 
+    // Model Templates table (New)
+    await sql`
+      CREATE TABLE IF NOT EXISTS model_templates (
+        id SERIAL PRIMARY KEY,
+        template_name VARCHAR(255) UNIQUE NOT NULL,
+        provider VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
     // Market Ads table (New)
     await sql`
       CREATE TABLE IF NOT EXISTS market_ads (
