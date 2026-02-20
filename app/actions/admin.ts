@@ -7,14 +7,17 @@ import { sql, initDatabase } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 // Admin check helper
-async function checkAdmin() {
+export const checkAdmin = async () => {
     const session = await getServerSession(authOptions);
-    const email = session?.user?.email;
-    if (!email || email !== "pevznergo@gmail.com") { // Simple check matching Sidebar logic
-        throw new Error("Unauthorized: Admin access required");
+    if (!session || !session.user || !session.user.email) {
+        throw new Error("Unauthorized");
     }
-    return session;
-}
+
+    // Only igordash1@gmail.com is admin
+    if (session.user.email !== "igordash1@gmail.com") {
+        throw new Error("Forbidden: Admin access only");
+    }
+};
 
 export async function getTemplateModels() {
     await checkAdmin();
@@ -492,10 +495,14 @@ export async function getKeyUsageStats() {
                     s.model, 
                     SUM(s.total_tokens) as total_tokens,
                     SUM(s.prompt_tokens) as prompt_tokens,
-                    SUM(s.completion_tokens) as completion_tokens
+                    SUM(s.completion_tokens) as completion_tokens,
+                    COALESCE(MAX(c.prompt_cost_per_1m), 0) as prompt_cost_per_1m,
+                    COALESCE(MAX(c.completion_cost_per_1m), 0) as completion_cost_per_1m
                 FROM "LiteLLM_SpendLogs" s
                 LEFT JOIN "LiteLLM_ProxyModelTable" m 
                     ON m.model_name = COALESCE(NULLIF((s.metadata->'model_map_information'->'model_map_value'->>'key'), ''), s.model)
+                LEFT JOIN admin_key_usage_model_costs c 
+                    ON c.model_name = s.model
                 WHERE s.api_key != 'litellm-internal-health-check'
                   AND s.status = 'success'
                 GROUP BY 1, 2
@@ -510,6 +517,17 @@ export async function getKeyUsageStats() {
                 const credentialAlias = row.credential_alias || 'unknown';
                 const modelName = row.model || 'unknown';
 
+                const pt = parseInt(row.prompt_tokens) || 0;
+                const ct = parseInt(row.completion_tokens) || 0;
+                const tt = parseInt(row.total_tokens) || 0;
+
+                // Calculate costs based on per_1m rates
+                const p1m = parseFloat(row.prompt_cost_per_1m) || 0;
+                const c1m = parseFloat(row.completion_cost_per_1m) || 0;
+                const prompt_cost_usd = (pt / 1000000) * p1m;
+                const completion_cost_usd = (ct / 1000000) * c1m;
+                const total_cost_usd = prompt_cost_usd + completion_cost_usd;
+
                 if (!groupedMap.has(credentialAlias)) {
                     groupedMap.set(credentialAlias, {
                         credentialAlias,
@@ -519,9 +537,12 @@ export async function getKeyUsageStats() {
 
                 groupedMap.get(credentialAlias).models.push({
                     modelName,
-                    total_tokens: parseInt(row.total_tokens) || 0,
-                    prompt_tokens: parseInt(row.prompt_tokens) || 0,
-                    completion_tokens: parseInt(row.completion_tokens) || 0
+                    total_tokens: tt,
+                    prompt_tokens: pt,
+                    completion_tokens: ct,
+                    prompt_cost_usd,
+                    completion_cost_usd,
+                    total_cost_usd
                 });
             }
 
@@ -532,7 +553,75 @@ export async function getKeyUsageStats() {
             client.release();
         }
     } catch (e: any) {
-        console.error("Failed to fetch key usage stats:", e);
+        console.error("Failed to get LiteLLM key usage stats:", e);
         return { success: false, error: e.message, stats: [] };
+    }
+}
+
+// ==========================================
+// COST TRACKING ACTIONS
+// ==========================================
+
+export async function getModelCosts() {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            const result = await client.query(`
+                SELECT model_name, prompt_cost_per_1m, completion_cost_per_1m, created_at
+                FROM admin_key_usage_model_costs
+                ORDER BY model_name ASC
+                `);
+            return { success: true, costs: result.rows };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to fetch model costs:", e);
+        return { success: false, error: e.message, costs: [] };
+    }
+}
+
+export async function saveModelCost(modelName: string, promptCost: number, completionCost: number) {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            await client.query(`
+                INSERT INTO admin_key_usage_model_costs(model_name, prompt_cost_per_1m, completion_cost_per_1m)
+            VALUES($1, $2, $3)
+                ON CONFLICT(model_name) 
+                DO UPDATE SET
+            prompt_cost_per_1m = EXCLUDED.prompt_cost_per_1m,
+                completion_cost_per_1m = EXCLUDED.completion_cost_per_1m
+                    `, [modelName.trim(), promptCost, completionCost]);
+
+            revalidatePath("/admin/model-costs");
+            revalidatePath("/admin/key-usage");
+            return { success: true };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to save model cost:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteModelCost(modelName: string) {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            await client.query(`DELETE FROM admin_key_usage_model_costs WHERE model_name = $1`, [modelName]);
+            revalidatePath("/admin/model-costs");
+            revalidatePath("/admin/key-usage");
+            return { success: true };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to delete model cost:", e);
+        return { success: false, error: e.message };
     }
 }

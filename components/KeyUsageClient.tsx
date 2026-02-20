@@ -58,6 +58,7 @@ export default function KeyUsageClient() {
                     {stats.map((providerGroup, index) => {
                         // Calculate totals for the group
                         const totalProviderTokens = providerGroup.models.reduce((sum: number, m: any) => sum + m.total_tokens, 0);
+                        const totalProviderCost = providerGroup.models.reduce((sum: number, m: any) => sum + m.total_cost_usd, 0);
 
                         return (
                             <div key={providerGroup.credentialAlias || index} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden transition-all hover:shadow-md">
@@ -72,9 +73,15 @@ export default function KeyUsageClient() {
                                             <p className="text-xs text-gray-500 font-mono">Upstream Provider Metrics</p>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Provider Tokens</p>
-                                        <p className="text-lg font-bold text-gray-900">{formatNumber(totalProviderTokens)}</p>
+                                    <div className="text-right flex items-center gap-6">
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Provider Spend</p>
+                                            <p className="text-lg font-bold text-green-700">${totalProviderCost.toFixed(4)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Total Provider Tokens</p>
+                                            <p className="text-lg font-bold text-gray-900">{formatNumber(totalProviderTokens)}</p>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -87,6 +94,7 @@ export default function KeyUsageClient() {
                                                 <th className="px-6 py-3 border-b border-gray-100 uppercase text-xs tracking-wider text-right">Prompt Tokens</th>
                                                 <th className="px-6 py-3 border-b border-gray-100 uppercase text-xs tracking-wider text-right">Completion Tokens</th>
                                                 <th className="px-6 py-3 border-b border-gray-100 uppercase text-xs tracking-wider text-right text-blue-700">Total Tokens</th>
+                                                <th className="px-6 py-3 border-b border-gray-100 uppercase text-xs tracking-wider text-right text-green-700">Estimated Cost</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
@@ -96,6 +104,7 @@ export default function KeyUsageClient() {
                                                     <td className="px-6 py-3 text-right text-gray-600">{formatNumber(model.prompt_tokens)}</td>
                                                     <td className="px-6 py-3 text-right text-gray-600">{formatNumber(model.completion_tokens)}</td>
                                                     <td className="px-6 py-3 text-right font-semibold text-gray-900">{formatNumber(model.total_tokens)}</td>
+                                                    <td className="px-6 py-3 text-right font-semibold text-green-700">${Number(model.total_cost_usd || 0).toFixed(4)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
