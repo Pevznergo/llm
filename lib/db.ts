@@ -496,6 +496,64 @@ export async function initDatabase() {
       )
     `;
 
+    // --- Strict Table Deletion/Truncation Protection ---
+    try {
+      console.log('Setting up strict database protection rules...');
+
+      // 1. Prevent DROP TABLE via Event Trigger
+      await sql`
+        CREATE OR REPLACE FUNCTION prevent_drop_table()
+        RETURNS event_trigger AS $$
+        BEGIN
+          IF tg_tag IN ('DROP TABLE', 'DROP SCHEMA') THEN
+            RAISE EXCEPTION 'Удаление таблиц СТРОГО ЗАПРЕЩЕНО! (DROP / TRUNCATE is blocked)';
+          END IF;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+
+      await sql`DROP EVENT TRIGGER IF EXISTS prevent_drop_table_trigger`;
+      await sql`
+        CREATE EVENT TRIGGER prevent_drop_table_trigger
+        ON sql_drop
+        EXECUTE FUNCTION prevent_drop_table();
+      `;
+
+      // 2. Prevent TRUNCATE TABLE via standard Function
+      await sql`
+        CREATE OR REPLACE FUNCTION prevent_truncate_table()
+        RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'Очистка таблиц СТРОГО ЗАПРЕЩЕНА! (TRUNCATE is blocked)';
+          RETURN NULL;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+
+      // Apply the TRUNCATE preventer to all tables in the public schema dynamically
+      const tables = await sql`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      `;
+
+      for (const row of tables) {
+        const tName = row.table_name;
+        // Postgres syntax for dropping triggers requires the table name
+        await sql([`DROP TRIGGER IF EXISTS prevent_truncate_trig ON "${tName}"`] as any as TemplateStringsArray);
+        await sql([`
+            CREATE TRIGGER prevent_truncate_trig
+            BEFORE TRUNCATE ON "${tName}"
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION prevent_truncate_table();
+        `] as any as TemplateStringsArray);
+      }
+
+      console.log('Database protection applied successfully.');
+    } catch (e) {
+      console.warn('Could not apply strict database protections:', e);
+    }
+
     console.log('Database initialized successfully')
   } catch (error) {
     console.error('Error initializing database:', error)

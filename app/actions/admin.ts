@@ -91,12 +91,15 @@ export async function getProviderCredentials() {
             const result = await client.query(`SELECT credential_id, credential_name, created_at FROM "LiteLLM_CredentialsTable" ORDER BY created_at DESC`);
 
             const credentials = result.rows.map(row => {
-                // We stored provider in the name using format "alias (provider)" or just map to "api_key" for now.
-                // We'll parse the alias out.
+                // We stored provider in the name using format "alias (provider)".
+                const match = row.credential_name.match(/(.+) \((.+)\)$/);
+                const alias = match ? match[1] : row.credential_name;
+                const provider = match ? match[2] : 'unknown';
+
                 return {
                     id: row.credential_id,
-                    alias: row.credential_name,
-                    provider: 'native', // The UI can just show 'native' or we can extract it if we save it specially.
+                    alias: alias,
+                    provider: provider,
                     created_at: row.created_at
                 }
             });
@@ -205,10 +208,12 @@ export async function bulkCreateModels(
             }
 
             // Set custom provider if it's custom. Otherwise litellm implies it from model_name prefix.
+            // Also prefix the api_key if it's not custom, based on provider
             if (provider === 'custom') {
                 newParams.custom_llm_provider = "custom";
             } else {
-                newParams.default_provider = provider;
+                // Some providers like gemini require the prefix in LiteLLM for routing sometimes, 
+                // but setting API key explicitly usually handles it.
             }
 
             const newModelConfig = {
