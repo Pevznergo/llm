@@ -209,3 +209,69 @@ export async function updateAdminModel(id: string, updates: any) {
         return { success: false, error: e.message };
     }
 }
+
+// --- Key Management Actions ---
+
+export async function adminGetAllKeys() {
+    await checkAdmin();
+    try {
+        const { listUsers, listKeys } = await import("@/lib/litellm");
+        const users = await listUsers();
+        let allKeys: any[] = [];
+        const userKeyPromises = users.map(u => listKeys(u.user_id).catch(() => []));
+        const results = await Promise.all(userKeyPromises);
+        results.forEach(keys => {
+            if (Array.isArray(keys)) {
+                allKeys = [...allKeys, ...keys];
+            }
+        });
+        return { success: true, keys: allKeys };
+    } catch (e: any) {
+        console.error("Failed to list all keys:", e);
+        return { success: false, error: e.message, keys: [] };
+    }
+}
+
+export async function adminGenerateKey(email: string, budget?: number, alias?: string) {
+    await checkAdmin();
+    try {
+        const { generateKey } = await import("@/lib/litellm");
+        // Ensure user exists or use admin email
+        const targetEmail = email || "pevznergo@gmail.com";
+        const newKey = await generateKey(targetEmail, budget, alias);
+        revalidatePath("/admin/add-credentials");
+        revalidatePath("/keys");
+        return { success: true, key: newKey };
+    } catch (e: any) {
+        console.error("Failed to generate key:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function adminDeleteKey(keyHash: string) {
+    await checkAdmin();
+    try {
+        const { deleteKey } = await import("@/lib/litellm");
+        await deleteKey(keyHash);
+        revalidatePath("/admin/add-credentials");
+        revalidatePath("/keys");
+        return { success: true };
+    } catch (e: any) {
+        console.error(`Failed to delete key ${keyHash}:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function adminUpdateKey(keyHash: string, updates: any) {
+    await checkAdmin();
+    try {
+        const { updateKey } = await import("@/lib/litellm");
+        await updateKey(keyHash, updates);
+        revalidatePath("/admin/add-credentials");
+        revalidatePath("/keys");
+        return { success: true };
+    } catch (e: any) {
+        console.error(`Failed to update key ${keyHash}:`, e);
+        return { success: false, error: e.message };
+    }
+}
