@@ -480,6 +480,7 @@ export async function getKeyUsageStats() {
                     SUM(completion_tokens) as completion_tokens
                 FROM "LiteLLM_SpendLogs"
                 WHERE api_key != 'litellm-internal-health-check'
+                  AND status = 'success'
                 GROUP BY api_key, model
                 ORDER BY key_alias, model
             `);
