@@ -247,8 +247,8 @@ export async function bulkCreateModels(
                 ...(templateDbObj.litellm_params || {})
             };
 
-            // Remove any old credential bindings pasted from a template
-            delete newParams.litellm_credential_name;
+            // Assign the credential name explicitly
+            newParams.litellm_credential_name = credentialAlias;
 
             if (rawApiKey.trim()) {
                 newParams.api_key = rawApiKey.trim();
@@ -280,7 +280,7 @@ export async function bulkCreateModels(
                 model_name: templateName,
                 litellm_params: newParams,
                 model_info: {
-                    id: templateName, // Always use the template name as the ID
+                    id: uuidv4(), // Generate a unique ID
                     db_model: true,
                     ...newModelInfo
                 }
