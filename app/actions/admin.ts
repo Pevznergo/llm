@@ -185,17 +185,26 @@ export async function bulkCreateModels(
         return { success: false, error: "Source credential and templates are required" };
     }
 
-    // Fetch the raw API key from LiteLLM DB
+    // Fetch the raw API key and credential name from LiteLLM DB
     let rawApiKey = "";
+    let credentialAlias = "UnknownKey";
+
     try {
         const client = await getLitellmDb().connect();
         try {
-            const result = await client.query(`SELECT credential_values FROM "LiteLLM_CredentialsTable" WHERE credential_id = $1`, [credentialId]);
+            const result = await client.query(`SELECT credential_name, credential_values FROM "LiteLLM_CredentialsTable" WHERE credential_id = $1`, [credentialId]);
             if (result.rows.length === 0) {
                 return { success: false, error: "Provider credential not found in LiteLLM DB." };
             }
+
             const vals = result.rows[0].credential_values;
             rawApiKey = vals.api_key || vals.OPENAI_API_KEY || vals.GEMINI_API_KEY || Object.values(vals)[0] || "";
+
+            // Extract a clean alias from "My Alias (provider)"
+            const cName = result.rows[0].credential_name;
+            const match = cName.match(/(.+) \((.+)\)$/);
+            credentialAlias = match ? match[1] : cName;
+
         } finally {
             client.release();
         }
@@ -218,14 +227,13 @@ export async function bulkCreateModels(
                 newParams.api_base = apiBase.trim();
             }
 
-            // Set custom provider if it's custom. Otherwise litellm implies it from model_name prefix.
-            // Also prefix the api_key if it's not custom, based on provider
+            // Set custom provider if it's custom.
             if (provider === 'custom') {
                 newParams.custom_llm_provider = "custom";
-            } else {
-                // Some providers like gemini require the prefix in LiteLLM for routing sometimes, 
-                // but setting API key explicitly usually handles it.
             }
+
+            // Add identifying tag for Usage Tracking
+            newParams.tags = [`provider_key:${credentialAlias}`];
 
             const newModelConfig = {
                 model_name: templateName,
@@ -469,10 +477,18 @@ export async function getKeyUsageStats() {
     try {
         const client = await getLitellmDb().connect();
         try {
-            // Group usage by upstream provider and model
+            // Group usage by specific Upstream Credential extracted from model tags
             const usageResult = await client.query(`
                 SELECT 
-                    COALESCE(NULLIF(custom_llm_provider, ''), SPLIT_PART(model, '/', 1)) as provider_name,
+                    COALESCE(
+                        (
+                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
+                            FROM jsonb_array_elements_text(request_tags) as tag 
+                            WHERE tag LIKE 'provider_key:%' 
+                            LIMIT 1
+                        ),
+                        'Untagged / Legacy Models'
+                    ) as credential_alias,
                     model, 
                     SUM(total_tokens) as total_tokens,
                     SUM(prompt_tokens) as prompt_tokens,
@@ -480,26 +496,26 @@ export async function getKeyUsageStats() {
                 FROM "LiteLLM_SpendLogs"
                 WHERE api_key != 'litellm-internal-health-check'
                   AND status = 'success'
-                GROUP BY COALESCE(NULLIF(custom_llm_provider, ''), SPLIT_PART(model, '/', 1)), model
-                ORDER BY provider_name, model
+                GROUP BY 1, 2
+                ORDER BY 1, 2
             `);
 
             // Transform into a cleaner nested structure:
-            // [ { providerName, models: [ { modelName, total_tokens, ... } ] } ]
+            // [ { credentialAlias, models: [ { modelName, total_tokens, ... } ] } ]
             const groupedMap = new Map<string, any>();
 
             for (const row of usageResult.rows) {
-                const providerName = row.provider_name || 'unknown';
+                const credentialAlias = row.credential_alias || 'unknown';
                 const modelName = row.model || 'unknown';
 
-                if (!groupedMap.has(providerName)) {
-                    groupedMap.set(providerName, {
-                        providerName,
+                if (!groupedMap.has(credentialAlias)) {
+                    groupedMap.set(credentialAlias, {
+                        credentialAlias,
                         models: []
                     });
                 }
 
-                groupedMap.get(providerName).models.push({
+                groupedMap.get(credentialAlias).models.push({
                     modelName,
                     total_tokens: parseInt(row.total_tokens) || 0,
                     prompt_tokens: parseInt(row.prompt_tokens) || 0,
