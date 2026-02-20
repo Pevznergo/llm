@@ -41,12 +41,18 @@ export async function getModelTemplates() {
     }
 }
 
-export async function addModelTemplate(templateName: string, provider: string) {
+export async function addModelTemplate(templateName: string, provider: string, modelInfoStr?: string, litellmParamsStr?: string) {
     await checkAdmin();
     try {
+        let miObj = null;
+        let lpObj = null;
+
+        if (modelInfoStr && modelInfoStr.trim()) miObj = JSON.parse(modelInfoStr);
+        if (litellmParamsStr && litellmParamsStr.trim()) lpObj = JSON.parse(litellmParamsStr);
+
         await sql`
-            INSERT INTO model_templates (template_name, provider) 
-            VALUES (${templateName}, ${provider})
+            INSERT INTO model_templates (template_name, provider, model_info, litellm_params) 
+            VALUES (${templateName}, ${provider}, ${miObj}, ${lpObj})
             ON CONFLICT (template_name) DO NOTHING
         `;
         revalidatePath("/admin/add-credentials");
@@ -183,7 +189,8 @@ export async function bulkCreateModels(
     credentialId: string, // now a UUID string
     templateNames: string[],
     provider: string,
-    apiBase?: string
+    apiBase?: string,
+    proxyUrl?: string
 ) {
     await checkAdmin();
 
@@ -220,17 +227,34 @@ export async function bulkCreateModels(
 
     const results = [];
 
+    // Fetch template data from DB to get their custom JSON payloads
+    let templateRows: any[] = [];
+    try {
+        templateRows = await sql`SELECT * FROM model_templates WHERE template_name = ANY(${templateNames})`;
+    } catch (e) {
+        console.warn("Could not fetch template details from DB, continuing without advanced parameters.", e);
+    }
+    const templatesMap = new Map(templateRows.map((t: any) => [t.template_name, t]));
+
     // Iterate and create
     for (const templateName of templateNames) {
         if (!templateName.trim()) continue;
 
         try {
-            const newParams: any = {};
+            const templateDbObj = templatesMap.get(templateName) || {};
+
+            const newParams: any = {
+                ...(templateDbObj.litellm_params || {})
+            };
+
             if (rawApiKey.trim()) {
                 newParams.api_key = rawApiKey.trim();
             }
             if (apiBase?.trim()) {
                 newParams.api_base = apiBase.trim();
+            }
+            if (proxyUrl?.trim()) {
+                newParams.proxy_url = proxyUrl.trim();
             }
 
             // Set custom provider if it's custom.
@@ -239,14 +263,16 @@ export async function bulkCreateModels(
             }
 
             // Add identifying tag for Usage Tracking
-            newParams.tags = [`provider_key:${credentialAlias}`];
+            const existingTags = Array.isArray(newParams.tags) ? newParams.tags : [];
+            newParams.tags = [...existingTags, `provider_key:${credentialAlias}`];
 
             const newModelConfig = {
                 model_name: templateName,
                 litellm_params: newParams,
                 model_info: {
                     id: templateName,
-                    db_model: true
+                    db_model: true,
+                    ...(templateDbObj.model_info || {})
                 }
             };
 

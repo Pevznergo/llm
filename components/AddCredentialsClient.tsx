@@ -28,7 +28,13 @@ export default function AddCredentialsClient() {
     // Template State
     const [templates, setTemplates] = useState<any[]>([]);
     const [newTemplateName, setNewTemplateName] = useState("");
+    const [newTemplateModelInfo, setNewTemplateModelInfo] = useState("");
+    const [newTemplateParams, setNewTemplateParams] = useState("");
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [managingTemplates, setManagingTemplates] = useState(false);
+
+    // Deployment state
+    const [proxyUrl, setProxyUrl] = useState("");
 
     // Creation State
     const [selectedCredId, setSelectedCredId] = useState<string>("");
@@ -108,9 +114,17 @@ export default function AddCredentialsClient() {
             ? credentials.find(c => c.id === selectedCredId)?.provider
             : credProvider;
 
-        const res = await addModelTemplate(newTemplateName.trim(), activeProvider || 'custom');
+        const res = await addModelTemplate(
+            newTemplateName.trim(),
+            activeProvider || 'custom',
+            newTemplateModelInfo.trim(),
+            newTemplateParams.trim()
+        );
         if (res.success) {
             setNewTemplateName("");
+            setNewTemplateModelInfo("");
+            setNewTemplateParams("");
+            setShowAdvanced(false);
             await fetchData();
         } else {
             alert("Error adding template: " + res.error);
@@ -155,7 +169,9 @@ export default function AddCredentialsClient() {
             const res = await bulkCreateModels(
                 selectedCredId,
                 selectedNames,
-                providerName
+                providerName,
+                undefined, // apiBase
+                proxyUrl.trim()
             );
 
             if (res.success && res.results) {
@@ -284,23 +300,55 @@ export default function AddCredentialsClient() {
                                 </p>
 
                                 {/* Custom Template Adder */}
-                                <div className="flex gap-2 mb-4">
-                                    <input
-                                        type="text"
-                                        value={newTemplateName}
-                                        onChange={(e) => setNewTemplateName(e.target.value)}
-                                        placeholder={`Add new ${activeProviderForTemplates || 'model'} template...`}
-                                        className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
-                                        onKeyDown={(e) => e.key === 'Enter' && handleAddTemplate()}
-                                        disabled={!selectedCredId && !credProvider}
-                                    />
-                                    <button
-                                        onClick={handleAddTemplate}
-                                        disabled={managingTemplates || !newTemplateName.trim()}
-                                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm disabled:opacity-50"
-                                    >
-                                        Add
-                                    </button>
+                                <div className="mb-4">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newTemplateName}
+                                            onChange={(e) => setNewTemplateName(e.target.value)}
+                                            placeholder={`Add new ${activeProviderForTemplates || 'model'} template...`}
+                                            className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddTemplate()}
+                                            disabled={!selectedCredId && !credProvider}
+                                        />
+                                        <button
+                                            onClick={() => setShowAdvanced(!showAdvanced)}
+                                            className="px-3 py-2 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-100 text-sm flex items-center gap-1"
+                                            type="button"
+                                        >
+                                            JSON ▼
+                                        </button>
+                                        <button
+                                            onClick={handleAddTemplate}
+                                            disabled={managingTemplates || !newTemplateName.trim()}
+                                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm disabled:opacity-50"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+
+                                    {showAdvanced && (
+                                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3 animate-in slide-in-from-top-2">
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-600 mb-1">Model Info (JSON Format)</label>
+                                                <textarea
+                                                    value={newTemplateModelInfo}
+                                                    onChange={(e) => setNewTemplateModelInfo(e.target.value)}
+                                                    placeholder='{"mode": "chat", "max_tokens": 8192}'
+                                                    className="w-full p-2 border border-gray-200 rounded text-xs font-mono h-20 outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-600 mb-1">LiteLLM Params (JSON Format)</label>
+                                                <textarea
+                                                    value={newTemplateParams}
+                                                    onChange={(e) => setNewTemplateParams(e.target.value)}
+                                                    placeholder='{"temperature": 0.7}'
+                                                    className="w-full p-2 border border-gray-200 rounded text-xs font-mono h-20 outline-none focus:ring-1 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Template List */}
@@ -335,6 +383,20 @@ export default function AddCredentialsClient() {
                                         ))
                                     )}
                                 </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-gray-100">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Dynamic Proxy URL (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={proxyUrl}
+                                    onChange={(e) => setProxyUrl(e.target.value)}
+                                    placeholder="http://186.179.50.213:8000:user:pass"
+                                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">This will be injected into litellm_params.proxy_url for all selected models.</p>
                             </div>
 
                             <button
