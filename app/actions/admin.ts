@@ -71,12 +71,21 @@ export async function deleteModelTemplate(id: number) {
 // Helper for connecting to the LiteLLM database (Supabase)
 import { Pool } from 'pg';
 let litellmPool: Pool | undefined;
+let activeDbUrl: string | undefined;
+
 const getLitellmDb = () => {
-    if (!litellmPool) {
+    const currentUrl = process.env.DATABASE_URL;
+    if (!currentUrl) {
+        throw new Error("DATABASE_URL is not defined in environment variables for LiteLLM DB.");
+    }
+
+    if (!litellmPool || activeDbUrl !== currentUrl) {
         litellmPool = new Pool({
-            connectionString: process.env.DATABASE_URL, // This points to Supabase where LiteLLM_CredentialsTable is
+            connectionString: currentUrl,
             ssl: { rejectUnauthorized: false }
         });
+        activeDbUrl = currentUrl;
+        console.log("Initialized new LiteLLM DB pool with URL ending in: " + currentUrl.slice(-10));
     }
     return litellmPool;
 };
@@ -88,7 +97,9 @@ export async function getProviderCredentials() {
         try {
             // Fetch all credentials from the LiteLLM native table. 
             // We return them as { id, provider, alias, created_at } to match the frontend shape.
+            console.log("Connecting to LiteLLM DB using url:", process.env.DATABASE_URL?.substring(0, 30) + "...");
             const result = await client.query(`SELECT credential_id, credential_name, created_at FROM "LiteLLM_CredentialsTable" ORDER BY created_at DESC`);
+            console.log("Fetched credentials from LiteLLM DB, count:", result.rows.length);
 
             const credentials = result.rows.map(row => {
                 // We stored provider in the name using format "alias (provider)".

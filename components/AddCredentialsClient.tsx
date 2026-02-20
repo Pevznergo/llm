@@ -48,8 +48,18 @@ export default function AddCredentialsClient() {
                 getTemplateModels() // Gets active models actually
             ]);
 
-            if (credRes.success) setCredentials(credRes.credentials || []);
-            if (tplRes.success) setTemplates(tplRes.templates || []);
+            if (credRes.success) {
+                setCredentials(credRes.credentials || []);
+            } else {
+                console.error("Failed to load credentials:", credRes.error);
+                // Optionally alert the user too
+                // alert("Could not load credentials: " + credRes.error);
+            }
+            if (tplRes.success) {
+                setTemplates(tplRes.templates || []);
+            } else {
+                console.error("Failed to load templates:", tplRes.error);
+            }
             setModels(fetchedModels || []);
         } catch (e) {
             console.error("Failed to fetch data", e);
