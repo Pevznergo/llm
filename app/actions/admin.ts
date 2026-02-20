@@ -141,9 +141,9 @@ export async function addProviderCredential(provider: string, alias: string, api
             const credential_values = JSON.stringify({ "api_key": apiKey });
 
             await client.query(`
-                INSERT INTO "LiteLLM_CredentialsTable" (credential_id, credential_name, credential_values, created_at, updated_at) 
-                VALUES ($1, $2, $3, NOW(), NOW())
-            `, [credential_id, credential_name, credential_values]);
+                INSERT INTO "LiteLLM_CredentialsTable" (credential_id, credential_name, credential_values, created_by, updated_by, created_at, updated_at) 
+                VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+            `, [credential_id, credential_name, credential_values, 'admin', 'admin']);
 
             revalidatePath("/admin/add-credentials");
             return { success: true };
@@ -460,5 +460,63 @@ export async function adminUpdateKey(keyHash: string, updates: any) {
     } catch (e: any) {
         console.error(`Failed to update key ${keyHash}:`, e);
         return { success: false, error: e.message };
+    }
+}
+
+// --- Key Usage Analytics ---
+export async function getKeyUsageStats() {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            // Group usage by api_key and model
+            const usageResult = await client.query(`
+                SELECT 
+                    api_key, 
+                    MAX(metadata->>'user_api_key_alias') as key_alias,
+                    model, 
+                    SUM(total_tokens) as total_tokens,
+                    SUM(prompt_tokens) as prompt_tokens,
+                    SUM(completion_tokens) as completion_tokens
+                FROM "LiteLLM_SpendLogs"
+                WHERE api_key != 'litellm-internal-health-check'
+                GROUP BY api_key, model
+                ORDER BY key_alias, model
+            `);
+
+            // Transform into a cleaner nested structure:
+            // [ { keyHash, keyAlias, models: [ { modelName, total_tokens, ... } ] } ]
+            const groupedMap = new Map<string, any>();
+
+            for (const row of usageResult.rows) {
+                const keyHash = row.api_key || 'unknown';
+                const keyAlias = row.key_alias || 'Unnamed Key';
+                const modelName = row.model || 'unknown';
+
+                if (!groupedMap.has(keyHash)) {
+                    groupedMap.set(keyHash, {
+                        keyHash,
+                        keyAlias,
+                        models: []
+                    });
+                }
+
+                groupedMap.get(keyHash).models.push({
+                    modelName,
+                    total_tokens: parseInt(row.total_tokens) || 0,
+                    prompt_tokens: parseInt(row.prompt_tokens) || 0,
+                    completion_tokens: parseInt(row.completion_tokens) || 0
+                });
+            }
+
+            const stats = Array.from(groupedMap.values());
+            return { success: true, stats };
+
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to fetch key usage stats:", e);
+        return { success: false, error: e.message, stats: [] };
     }
 }

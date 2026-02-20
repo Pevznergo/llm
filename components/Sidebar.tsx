@@ -121,6 +121,16 @@ export function Sidebar() {
                                 <Key className="h-5 w-5" />
                                 Add Credentials
                             </Link>
+                            <Link
+                                href="/admin/key-usage"
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-emerald-600 hover:bg-emerald-50",
+                                    pathname === "/admin/key-usage" ? "bg-emerald-50" : ""
+                                )}
+                            >
+                                <Activity className="h-5 w-5" />
+                                Key Usage Stats
+                            </Link>
                         </div>
                     )}
                 </nav>
