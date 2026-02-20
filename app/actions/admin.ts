@@ -481,6 +481,7 @@ export async function getKeyUsageStats() {
         const client = await getLitellmDb().connect();
         try {
             // Group usage by specific Upstream Credential extracted from model tags via JOIN
+            // We search for the tag in BOTH the Proxy Model config AND the per-request tags
             const usageResult = await client.query(`
                 SELECT 
                     COALESCE(
@@ -490,14 +491,20 @@ export async function getKeyUsageStats() {
                             WHERE tag LIKE 'provider_key:%' 
                             LIMIT 1
                         ),
+                        (
+                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
+                            FROM jsonb_array_elements_text(s.request_tags) as tag 
+                            WHERE tag LIKE 'provider_key:%' 
+                            LIMIT 1
+                        ),
                         'Untagged / Legacy Models'
                     ) as credential_alias,
                     s.model, 
-                    SUM(s.total_tokens) as total_tokens,
-                    SUM(s.prompt_tokens) as prompt_tokens,
-                    SUM(s.completion_tokens) as completion_tokens,
-                    COALESCE(MAX(c.prompt_cost_per_1m), 0) as prompt_cost_per_1m,
-                    COALESCE(MAX(c.completion_cost_per_1m), 0) as completion_cost_per_1m
+                    SUM(COALESCE(s.total_tokens, 0)) as total_tokens,
+                    SUM(COALESCE(s.prompt_tokens, 0)) as prompt_tokens,
+                    SUM(COALESCE(s.completion_tokens, 0)) as completion_tokens,
+                    MAX(COALESCE(c.prompt_cost_per_1m, 0)) as prompt_cost_per_1m,
+                    MAX(COALESCE(c.completion_cost_per_1m, 0)) as completion_cost_per_1m
                 FROM "LiteLLM_SpendLogs" s
                 LEFT JOIN "LiteLLM_ProxyModelTable" m 
                     ON m.model_name = COALESCE(NULLIF((s.metadata->'model_map_information'->'model_map_value'->>'key'), ''), s.model)
@@ -506,8 +513,14 @@ export async function getKeyUsageStats() {
                 WHERE s.api_key != 'litellm-internal-health-check'
                   AND s.status = 'success'
                 GROUP BY 1, 2
+                HAVING SUM(COALESCE(s.total_tokens, 0)) > 0
                 ORDER BY 1, 2
             `);
+
+            console.log(`[DEBUG] getKeyUsageStats: ${usageResult.rows.length} rows returned from DB`);
+            if (usageResult.rows.length > 0) {
+                console.log(`[DEBUG] Sample row:`, JSON.stringify(usageResult.rows[0]));
+            }
 
             // Transform into a cleaner nested structure:
             // [ { credentialAlias, models: [ { modelName, total_tokens, ... } ] } ]
