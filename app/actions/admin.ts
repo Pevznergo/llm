@@ -532,31 +532,23 @@ export async function getKeyUsageStats() {
             const usageResult = await client.query(`
                 SELECT 
                     COALESCE(
-                        (
-                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
-                            FROM jsonb_array_elements_text(m.litellm_params->'tags') as tag 
-                            WHERE tag LIKE 'provider_key:%' 
-                            LIMIT 1
-                        ),
-                        (
-                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
-                            FROM jsonb_array_elements_text(s.request_tags) as tag 
-                            WHERE tag LIKE 'provider_key:%' 
-                            LIMIT 1
-                        ),
+                        c.credential_name,          -- The user friendly alias
+                        m.litellm_params->>'litellm_credential_name', -- Raw credential ID if dangling
                         'Untagged / Legacy Models'
                     ) as credential_alias,
-                    s.model, 
+                    s.model,
                     SUM(COALESCE(s.total_tokens, 0)) as total_tokens,
                     SUM(COALESCE(s.prompt_tokens, 0)) as prompt_tokens,
                     SUM(COALESCE(s.completion_tokens, 0)) as completion_tokens,
-                    MAX(COALESCE(c.prompt_cost_per_1m, 0)) as prompt_cost_per_1m,
-                    MAX(COALESCE(c.completion_cost_per_1m, 0)) as completion_cost_per_1m
+                    MAX(COALESCE(mc.prompt_cost_per_1m, 0)) as prompt_cost_per_1m,
+                    MAX(COALESCE(mc.completion_cost_per_1m, 0)) as completion_cost_per_1m
                 FROM "LiteLLM_SpendLogs" s
                 LEFT JOIN "LiteLLM_ProxyModelTable" m 
-                    ON m.model_name = COALESCE(NULLIF((s.metadata->'model_map_information'->'model_map_value'->>'key'), ''), s.model)
-                LEFT JOIN admin_key_usage_model_costs c 
-                    ON c.model_name = s.model
+                    ON m.model_info->>'id' = s.model_id
+                LEFT JOIN "LiteLLM_CredentialsTable" c
+                    ON c.credential_id = m.litellm_params->>'litellm_credential_name'
+                LEFT JOIN admin_key_usage_model_costs mc 
+                    ON mc.model_name = s.model
                 WHERE s.api_key != 'litellm-internal-health-check'
                   AND s.status = 'success'
                 GROUP BY 1, 2
@@ -581,7 +573,6 @@ export async function getKeyUsageStats() {
                 const ct = parseInt(row.completion_tokens) || 0;
                 const tt = parseInt(row.total_tokens) || 0;
 
-                // Calculate costs based on per_1m rates
                 const p1m = parseFloat(row.prompt_cost_per_1m) || 0;
                 const c1m = parseFloat(row.completion_cost_per_1m) || 0;
                 const prompt_cost_usd = (pt / 1000000) * p1m;
