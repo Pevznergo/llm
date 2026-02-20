@@ -247,6 +247,9 @@ export async function bulkCreateModels(
                 ...(templateDbObj.litellm_params || {})
             };
 
+            // Remove any old credential bindings pasted from a template
+            delete newParams.litellm_credential_name;
+
             if (rawApiKey.trim()) {
                 newParams.api_key = rawApiKey.trim();
             }
@@ -266,13 +269,20 @@ export async function bulkCreateModels(
             const existingTags = Array.isArray(newParams.tags) ? newParams.tags : [];
             newParams.tags = [...existingTags, `provider_key:${credentialAlias}`];
 
+            const newModelInfo = {
+                ...(templateDbObj.model_info || {})
+            };
+
+            // Remove any old hardcoded ID pasted from a template
+            delete newModelInfo.id;
+
             const newModelConfig = {
                 model_name: templateName,
                 litellm_params: newParams,
                 model_info: {
-                    id: templateName,
+                    id: templateName, // Always use the template name as the ID
                     db_model: true,
-                    ...(templateDbObj.model_info || {})
+                    ...newModelInfo
                 }
             };
 
