@@ -309,3 +309,15 @@ export async function createModel(modelConfig: any): Promise<any> {
         throw new Error(e.message);
     }
 }
+
+export async function deleteModel(id: string): Promise<any> {
+    try {
+        const data = await litellmFetch("/model/delete", {
+            method: "POST",
+            body: JSON.stringify({ id })
+        });
+        return data;
+    } catch (e: any) {
+        throw new Error(e.message);
+    }
+}

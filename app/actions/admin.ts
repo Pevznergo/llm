@@ -2,7 +2,7 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getModels, createModel, LiteLLMModel, updateUser, getUser } from "@/lib/litellm";
+import { getModels, createModel, LiteLLMModel, updateUser, getUser, deleteModel } from "@/lib/litellm";
 import { revalidatePath } from "next/cache";
 
 // Admin check helper
@@ -167,6 +167,45 @@ export async function updateUserFunds(
         return { success: true };
     } catch (e: any) {
         console.error("Failed to update user funds:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function deleteAdminModel(id: string) {
+    await checkAdmin();
+    try {
+        await deleteModel(id);
+        revalidatePath("/admin/add-credentials");
+        revalidatePath("/models");
+        return { success: true };
+    } catch (e: any) {
+        console.error(`Failed to delete model ${id}:`, e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function updateAdminModel(id: string, updates: any) {
+    await checkAdmin();
+    try {
+        // LiteLLM update model usually works via /model/update if it exists, or re-POSTing to /model/new can sometimes overwrite it depending on config.
+        // It's safer to use the proper litellm api (or if they rely on db model creation, /model/new can update an existing key if it matches id, or there is an explicit /model/update endpoint but we haven't wrapped it yet)
+
+        // Wait, looking at litellm proxy, to update a model you use POST /model/new with same model_name and updated litellm_params.
+        const modelConfig = {
+            model_name: id,
+            litellm_params: updates,
+            model_info: {
+                id: id,
+                db_model: true
+            }
+        };
+
+        await createModel(modelConfig);
+        revalidatePath("/admin/add-credentials");
+        revalidatePath("/models");
+        return { success: true };
+    } catch (e: any) {
+        console.error(`Failed to update model ${id}:`, e);
         return { success: false, error: e.message };
     }
 }

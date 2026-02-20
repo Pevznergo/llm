@@ -78,3 +78,5 @@ tmp/
 *.tmp
 .env.production
 
+# Next.js
+.next

@@ -101,6 +101,7 @@ export function Sidebar() {
 
                     {isAdmin && (
                         <div className="pt-4 mt-4 border-t border-gray-100 flex flex-col gap-1">
+                            {/* 
                             <Link
                                 href="/admin/users"
                                 className={cn(
@@ -110,7 +111,8 @@ export function Sidebar() {
                             >
                                 <Settings className="h-5 w-5" />
                                 Admin Users
-                            </Link>
+                            </Link> 
+                            */}
                             <Link
                                 href="/admin/add-credentials"
                                 className={cn(
