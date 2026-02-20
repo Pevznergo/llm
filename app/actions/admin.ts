@@ -275,7 +275,9 @@ export async function bulkCreateModels(
 
             // Add identifying tag for Usage Tracking
             const existingTags = Array.isArray(newParams.tags) ? newParams.tags : [];
-            newParams.tags = [...existingTags, `provider_key:${credentialAlias}`];
+            // Remove any old provider_key tags pasted from templates to avoid conflicts
+            const cleanedTags = existingTags.filter((tag: any) => typeof tag !== 'string' || !tag.startsWith('provider_key:'));
+            newParams.tags = [...cleanedTags, `provider_key:${credentialAlias}`];
 
             const newModelInfo = {
                 ...(templateDbObj.model_info || {})
