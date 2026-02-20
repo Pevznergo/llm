@@ -212,6 +212,13 @@ export default function AddCredentialsClient() {
                                         <option value="anthropic">Anthropic</option>
                                         <option value="xai">xAI</option>
                                         <option value="azure">Azure OpenAI</option>
+                                        <option value="mistral">Mistral</option>
+                                        <option value="openrouter">OpenRouter</option>
+                                        <option value="groq">Groq</option>
+                                        <option value="together_ai">Together AI</option>
+                                        <option value="cohere">Cohere</option>
+                                        <option value="bedrock">AWS Bedrock</option>
+                                        <option value="vertex_ai">Google Vertex AI</option>
                                     </select>
                                 </div>
                                 <div>

@@ -141,7 +141,10 @@ export async function addProviderCredential(provider: string, alias: string, api
             const credential_name = `${alias} (${provider})`;
             // LiteLLM stores the actual secret in credential_values as {"api_key": "..."} usually, or custom formats.
             // Using standard python dict as JSONB
-            const credential_values = JSON.stringify({ "api_key": apiKey });
+            const credential_values = JSON.stringify({
+                "api_key": apiKey,
+                "custom_llm_provider": provider
+            });
 
             await client.query(`
                 INSERT INTO "LiteLLM_CredentialsTable" (credential_id, credential_name, credential_values, created_by, updated_by, created_at, updated_at) 
