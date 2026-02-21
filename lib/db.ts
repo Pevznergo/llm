@@ -496,6 +496,17 @@ export async function initDatabase() {
       )
     `;
 
+    // GCP API Key Automation Table
+    await sql`
+      CREATE TABLE IF NOT EXISTS gcp_api_keys (
+        id SERIAL PRIMARY KEY,
+        project_id VARCHAR(255) NOT NULL,
+        api_key VARCHAR(255) NOT NULL,
+        status VARCHAR(50) DEFAULT 'active',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
     // --- Strict Table Deletion/Truncation Protection ---
     try {
       console.log('Setting up strict database protection rules...');
