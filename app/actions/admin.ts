@@ -111,14 +111,17 @@ export async function getProviderCredentials() {
             // Fetch all credentials from the LiteLLM native table. 
             // We return them as { id, provider, alias, created_at } to match the frontend shape.
             console.log("Connecting to LiteLLM DB using url:", process.env.DATABASE_URL?.substring(0, 30) + "...");
-            const result = await client.query(`SELECT credential_id, credential_name, created_at FROM "LiteLLM_CredentialsTable" ORDER BY created_at DESC`);
+            const result = await client.query(`SELECT credential_id, credential_name, credential_values, created_at FROM "LiteLLM_CredentialsTable" ORDER BY created_at DESC`);
             console.log("Fetched credentials from LiteLLM DB, count:", result.rows.length);
 
             const credentials = result.rows.map(row => {
-                // We stored provider in the name using format "alias (provider)".
+                // Support legacy aliases that had "alias (provider)". New aliases use exact string.
                 const match = row.credential_name.match(/(.+) \((.+)\)$/);
                 const alias = match ? match[1] : row.credential_name;
-                const provider = match ? match[2] : 'unknown';
+
+                // Fetch provider from JSON payload if present, fallback to legacy regex
+                const vals = row.credential_values || {};
+                const provider = vals.custom_llm_provider || (match ? match[2] : 'unknown');
 
                 return {
                     id: row.credential_id,
@@ -148,7 +151,7 @@ export async function addProviderCredential(provider: string, alias: string, api
         const client = await getLitellmDb().connect();
         try {
             const credential_id = uuidv4();
-            const credential_name = `${alias} (${provider})`;
+            const credential_name = alias;
             // LiteLLM stores the actual secret in credential_values as {"api_key": "..."} usually, or custom formats.
             // Using standard python dict as JSONB
             const credential_values = JSON.stringify({
@@ -217,7 +220,7 @@ export async function bulkCreateModels(
             const vals = result.rows[0].credential_values;
             rawApiKey = vals.api_key || vals.OPENAI_API_KEY || vals.GEMINI_API_KEY || Object.values(vals)[0] || "";
 
-            // Extract a clean alias from "My Alias (provider)"
+            // Extract a clean alias from "My Alias (provider)" backwards compatibility
             const cName = result.rows[0].credential_name;
             const match = cName.match(/(.+) \((.+)\)$/);
             credentialAlias = match ? match[1] : cName;
