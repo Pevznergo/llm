@@ -532,37 +532,45 @@ export async function getKeyUsageStats() {
             // Group usage by specific Upstream Credential extracted from model tags via JOIN
             // We search for the tag in BOTH the Proxy Model config AND the per-request tags
             const usageResult = await client.query(`
+                WITH UsageData AS (
+                    SELECT 
+                        COALESCE(
+                            (
+                                SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
+                                FROM jsonb_array_elements_text(
+                                    CASE WHEN jsonb_typeof(m.litellm_params->'tags') = 'array' 
+                                         THEN m.litellm_params->'tags' 
+                                         ELSE '[]'::jsonb 
+                                    END
+                                ) as tag 
+                                WHERE tag LIKE 'provider_key:%' 
+                                LIMIT 1
+                            ),
+                            'Untagged / Legacy Models'
+                        ) as credential_alias,
+                        s.model,
+                        SUM(COALESCE(s.total_tokens, 0)) as total_tokens,
+                        SUM(COALESCE(s.prompt_tokens, 0)) as prompt_tokens,
+                        SUM(COALESCE(s.completion_tokens, 0)) as completion_tokens,
+                        MAX(COALESCE(mc.prompt_cost_per_1m, 0)) as prompt_cost_per_1m,
+                        MAX(COALESCE(mc.completion_cost_per_1m, 0)) as completion_cost_per_1m
+                    FROM "LiteLLM_SpendLogs" s
+                    LEFT JOIN "LiteLLM_ProxyModelTable" m 
+                        ON m.model_info->>'id' = s.model_id
+                    LEFT JOIN admin_key_usage_model_costs mc 
+                        ON mc.model_name = s.model
+                    WHERE s.api_key != 'litellm-internal-health-check'
+                      AND s.status = 'success'
+                    GROUP BY 1, 2
+                    HAVING SUM(COALESCE(s.total_tokens, 0)) > 0
+                )
                 SELECT 
-                    COALESCE(
-                        (
-                            SELECT SUBSTRING(tag FROM 'provider_key:(.*)') 
-                            FROM jsonb_array_elements_text(
-                                CASE WHEN jsonb_typeof(m.litellm_params->'tags') = 'array' 
-                                     THEN m.litellm_params->'tags' 
-                                     ELSE '[]'::jsonb 
-                                END
-                            ) as tag 
-                            WHERE tag LIKE 'provider_key:%' 
-                            LIMIT 1
-                        ),
-                        'Untagged / Legacy Models'
-                    ) as credential_alias,
-                    s.model,
-                    SUM(COALESCE(s.total_tokens, 0)) as total_tokens,
-                    SUM(COALESCE(s.prompt_tokens, 0)) as prompt_tokens,
-                    SUM(COALESCE(s.completion_tokens, 0)) as completion_tokens,
-                    MAX(COALESCE(mc.prompt_cost_per_1m, 0)) as prompt_cost_per_1m,
-                    MAX(COALESCE(mc.completion_cost_per_1m, 0)) as completion_cost_per_1m
-                FROM "LiteLLM_SpendLogs" s
-                LEFT JOIN "LiteLLM_ProxyModelTable" m 
-                    ON m.model_info->>'id' = s.model_id
-                LEFT JOIN admin_key_usage_model_costs mc 
-                    ON mc.model_name = s.model
-                WHERE s.api_key != 'litellm-internal-health-check'
-                  AND s.status = 'success'
-                GROUP BY 1, 2
-                HAVING SUM(COALESCE(s.total_tokens, 0)) > 0
-                ORDER BY 1, 2
+                    u.*,
+                    COALESCE(t.spend_limit, 290.000000) as limit_usd,
+                    COALESCE(t.status, 'active') as tag_status
+                FROM UsageData u
+                LEFT JOIN admin_key_usage_tags t ON t.tag_name = u.credential_alias
+                ORDER BY u.credential_alias, u.model
             `);
 
             console.log(`[DEBUG] getKeyUsageStats: ${usageResult.rows.length} rows returned from DB`);
@@ -591,6 +599,8 @@ export async function getKeyUsageStats() {
                 if (!groupedMap.has(credentialAlias)) {
                     groupedMap.set(credentialAlias, {
                         credentialAlias,
+                        limit_usd: parseFloat(row.limit_usd) || 290,
+                        tag_status: row.tag_status || 'active',
                         models: []
                     });
                 }
@@ -682,6 +692,66 @@ export async function deleteModelCost(modelName: string) {
         }
     } catch (e: any) {
         console.error("Failed to delete model cost:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+// ==========================================
+// TAG LIMITS & ARCHIVING ACTIONS
+// ==========================================
+
+export async function updateTagLimit(tagName: string, spendLimit: number) {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            await client.query(`
+                INSERT INTO admin_key_usage_tags (tag_name, spend_limit)
+                VALUES ($1, $2)
+                ON CONFLICT (tag_name) DO UPDATE SET spend_limit = EXCLUDED.spend_limit, updated_at = CURRENT_TIMESTAMP
+            `, [tagName, spendLimit]);
+
+            revalidatePath("/admin/key-usage");
+            return { success: true };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to update tag limit:", e);
+        return { success: false, error: e.message };
+    }
+}
+
+export async function toggleTagStatus(tagName: string, status: string) {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            await client.query(`
+                INSERT INTO admin_key_usage_tags (tag_name, status)
+                VALUES ($1, $2)
+                ON CONFLICT (tag_name) DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP
+            `, [tagName, status]);
+
+            if (status === 'archived') {
+                // Determine exactly which models use this exact provider key tag:
+                // Note: The tag is represented as "provider_key:NAME" in litellm_params->'tags'
+                const searchTag = `provider_key:${tagName}`;
+                console.log(`[toggleTagStatus] Archiving tag ${tagName}. Deleting associated models via LiteLLM DB directly.`);
+
+                await client.query(`
+                    DELETE FROM "LiteLLM_ProxyModelTable" 
+                    WHERE litellm_params->'tags' @> $1::jsonb
+                `, [JSON.stringify([searchTag])]);
+            }
+
+            revalidatePath("/admin/key-usage");
+            return { success: true };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to update tag status:", e);
         return { success: false, error: e.message };
     }
 }

@@ -7,7 +7,7 @@ echo "🚀 Starting deployment..."
 
 # 1. Pull latest code
 echo "📥 Pulling latest code..."
-ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "cd /root/litellm && git pull origin main"
+ssh -i ~/.ssh/vast_id_ed25519 root@74.208.193.3 "cd /root/litellm && git pull origin main && docker compose up -d --build litellm"
 
 # 4. Deploy Client Portal (Next.js with PM2)
 echo "abc Deploying Client Portal..."
