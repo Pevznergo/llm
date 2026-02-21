@@ -144,7 +144,9 @@ export async function POST(req: NextRequest) {
                                 }
                             });
 
-                            const generatedKey = keyOp.data.keyString;
+                            // Operation response contains the actual Key object
+                            const operation = keyOp.data;
+                            const generatedKey = (operation.response as any)?.keyString;
 
                             if (generatedKey) {
                                 // E. Save to Database
