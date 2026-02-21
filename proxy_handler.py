@@ -16,7 +16,8 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
                 
                 # 2. Attach the SOCKS proxy client Transport natively
                 data["client"] = httpx.AsyncClient(proxy=proxy)
-                print(f"[ProxyIntercept] Successfully bound SOCKS proxy transport to model {data.get('model')}")
+                key_preview = str(data.get("api_key", params.get("api_key", "MISSING_KEY")))[0:15]
+                print(f"[ProxyIntercept] Successfully bound SOCKS proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
         except Exception as e:
             print(f"[ProxyIntercept] Failed to inject network proxy: {str(e)}")
             

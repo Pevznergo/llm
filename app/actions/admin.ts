@@ -48,7 +48,11 @@ export async function addModelTemplate(templateName: string, provider: string, m
         let lpObj = null;
 
         if (modelInfoStr && modelInfoStr.trim()) miObj = JSON.parse(modelInfoStr);
-        if (litellmParamsStr && litellmParamsStr.trim()) lpObj = JSON.parse(litellmParamsStr);
+        if (litellmParamsStr && litellmParamsStr.trim()) {
+            lpObj = JSON.parse(litellmParamsStr);
+            // Sanitize template to prevent users from accidentally hardcoding API keys inside JSON templates
+            if (lpObj.api_key) delete lpObj.api_key;
+        }
 
         await sql`
             INSERT INTO model_templates (template_name, provider, model_info, litellm_params) 
@@ -295,6 +299,22 @@ export async function bulkCreateModels(
                     ...newModelInfo
                 }
             };
+
+            // Pre-cleanup: Prevent duplicate deployments (ghost nodes) for the same credential and model name mapping
+            try {
+                const cleanupClient = await getLitellmDb().connect();
+                try {
+                    await cleanupClient.query(`
+                        DELETE FROM "LiteLLM_ProxyModelTable"
+                        WHERE model_name = $1
+                          AND litellm_params->>'litellm_credential_name' = $2
+                    `, [templateName, credentialAlias]);
+                } finally {
+                    cleanupClient.release();
+                }
+            } catch (cleanupErr) {
+                console.warn("Failed to cleanup old model deployments before upserting:", cleanupErr);
+            }
 
             await createModel(newModelConfig);
             results.push({ name: templateName, status: "created" });
