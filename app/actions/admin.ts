@@ -805,39 +805,54 @@ export async function toggleTagStatus(tagName: string, status: string) {
 export async function getDailyModelLimits() {
     await checkAdmin();
     try {
+        const { getModels } = await import("@/lib/litellm");
+        const liteModels = await getModels();
+
+        const connectedMap = new Map<string, number>();
+
+        for (const m of liteModels) {
+            const mName = m.id;
+            const rld = m.litellm_params?.max_requests_per_day || 0;
+            connectedMap.set(mName, (connectedMap.get(mName) || 0) + Number(rld));
+        }
+
+        let usageRows: any[] = [];
         const client = await getLitellmDb().connect();
         try {
             const usageResult = await client.query(`
-                WITH DailyUsage AS (
-                    SELECT 
-                        s.model,
-                        COUNT(s.request_id) as consumed_today
-                    FROM "LiteLLM_SpendLogs" s
-                    WHERE s.status = 'success'
-                      AND s.api_key != 'litellm-internal-health-check'
-                      AND s.created_at >= CURRENT_DATE
-                    GROUP BY s.model
-                ),
-                ConnectedModels AS (
-                    SELECT 
-                        model_name,
-                        SUM(COALESCE((litellm_params->>'max_requests_per_day')::numeric, 0)) as total_rld
-                    FROM "LiteLLM_ProxyModelTable"
-                    GROUP BY model_name
-                )
                 SELECT 
-                    cm.model_name,
-                    cm.total_rld as rld,
-                    COALESCE(du.consumed_today, 0) as consumed_today
-                FROM ConnectedModels cm
-                LEFT JOIN DailyUsage du ON du.model = cm.model_name
-                ORDER BY cm.model_name
+                    model,
+                    COUNT(request_id) as consumed_today
+                FROM "LiteLLM_SpendLogs"
+                WHERE status = 'success'
+                  AND api_key != 'litellm-internal-health-check'
+                  AND created_at >= CURRENT_DATE
+                GROUP BY model
             `);
-
-            return { success: true, limits: usageResult.rows };
+            usageRows = usageResult.rows;
         } finally {
             client.release();
         }
+
+        const usageMap = new Map<string, number>();
+        for (const r of usageRows) {
+            usageMap.set(r.model, parseInt(r.consumed_today) || 0);
+        }
+
+        const limits = [];
+        for (const [modelName, rld] of connectedMap.entries()) {
+            limits.push({
+                model_name: modelName,
+                rld: rld,
+                consumed_today: usageMap.get(modelName) || 0
+            });
+        }
+
+        // Sort alphabetically
+        limits.sort((a, b) => a.model_name.localeCompare(b.model_name));
+
+        return { success: true, limits };
+
     } catch (e: any) {
         console.error("Failed to fetch daily model limits:", e);
         return { success: false, error: e.message, limits: [] };
