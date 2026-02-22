@@ -828,21 +828,25 @@ export async function getDailyModelLimits() {
         try {
             // Only parse DB explicitly if API mapping missed it (e.g local dev without proxy)
             if (connectedMap.size === 0) {
-                const modelResult = await client.query(`SELECT model_name, litellm_params FROM "LiteLLM_ProxyModelTable"`);
+                const modelResult = await client.query(`SELECT model_name FROM "LiteLLM_ProxyModelTable"`);
                 for (const row of modelResult.rows) {
-                    const p = row.litellm_params;
                     const mName = row.model_name;
-
-                    // Safety parse if stringified JSON or plain object
-                    let paramsObj = typeof p === 'string' ? JSON.parse(p) : p;
-
-                    // LiteLLM might encrypt the whole block, but our `bulkCreateModels` saves max_requests_per_day visibly 
-                    // if we don't enable proxy encryption on startup, or it might just be raw if we used our own UI.
-                    const rawLim = paramsObj?.max_requests_per_day;
-                    const rld = parseInt(rawLim, 10) || 0;
-
-                    connectedMap.set(mName, (connectedMap.get(mName) || 0) + rld);
+                    connectedMap.set(mName, 0); // Default to 0, updated below
                 }
+            }
+
+            // Sync actual RLD limits from our settings table
+            try {
+                const costsRes = await client.query(`SELECT model_name, rld FROM admin_key_usage_model_costs WHERE rld > 0`);
+                for (const r of costsRes.rows) {
+                    const mName = r.model_name;
+                    const rld = Number(r.rld) || 0;
+                    if (rld > 0) {
+                        connectedMap.set(mName, rld);
+                    }
+                }
+            } catch (rldErr) {
+                console.warn("Failed to fetch RLD from costs table:", rldErr);
             }
 
             const usageResult = await client.query(`
@@ -852,7 +856,7 @@ export async function getDailyModelLimits() {
                 FROM "LiteLLM_SpendLogs"
                 WHERE status = 'success'
                   AND api_key != 'litellm-internal-health-check'
-                  AND created_at >= CURRENT_DATE
+                  AND "startTime" >= CURRENT_DATE
                 GROUP BY model
             `);
             usageRows = usageResult.rows;
@@ -867,7 +871,7 @@ export async function getDailyModelLimits() {
         }
 
         const limits = [];
-        for (const [modelName, rld] of connectedMap.entries()) {
+        for (const [modelName, rld] of Array.from(connectedMap.entries())) {
             limits.push({
                 model_name: modelName,
                 rld: rld,
