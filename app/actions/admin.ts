@@ -52,6 +52,10 @@ export async function addModelTemplate(templateName: string, provider: string, m
             lpObj = JSON.parse(litellmParamsStr);
             // Sanitize template to prevent users from accidentally hardcoding API keys inside JSON templates
             if (lpObj.api_key) delete lpObj.api_key;
+            // LiteLLM expects numeric RLD
+            if (lpObj.max_requests_per_day !== undefined) {
+                lpObj.max_requests_per_day = parseInt(String(lpObj.max_requests_per_day), 10) || 0;
+            }
         }
 
         await sql`
@@ -475,6 +479,10 @@ export async function deleteAdminModel(id: string) {
 export async function updateAdminModel(id: string, updates: any) {
     await checkAdmin();
     try {
+        if (updates && updates.max_requests_per_day !== undefined) {
+            updates.max_requests_per_day = parseInt(String(updates.max_requests_per_day), 10) || 0;
+        }
+
         // LiteLLM update model usually works via /model/update if it exists, or re-POSTing to /model/new can sometimes overwrite it depending on config.
         // It's safer to use the proper litellm api (or if they rely on db model creation, /model/new can update an existing key if it matches id, or there is an explicit /model/update endpoint but we haven't wrapped it yet)
 
