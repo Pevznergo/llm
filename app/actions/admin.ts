@@ -853,7 +853,7 @@ export async function getDailyModelLimits() {
                 FROM "LiteLLM_SpendLogs"
                 WHERE status = 'success'
                   AND api_key != 'litellm-internal-health-check'
-                  AND "startTime" >= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'America/Los_Angeles')::date
+                  AND DATE("startTime" AT TIME ZONE 'America/Los_Angeles') >= DATE(CURRENT_TIMESTAMP AT TIME ZONE 'America/Los_Angeles')
                 GROUP BY model_id, model
             `);
             usageRows = usageResult.rows;
