@@ -21,7 +21,6 @@ export default function AddCredentialsClient() {
     // Credentials State
     const [credentials, setCredentials] = useState<any[]>([]);
     const [credProvider, setCredProvider] = useState("gemini");
-    const [credAlias, setCredAlias] = useState("");
     const [credApiKey, setCredApiKey] = useState("");
     const [managingCreds, setManagingCreds] = useState(false);
 
@@ -80,11 +79,13 @@ export default function AddCredentialsClient() {
     // --- Actions ---
 
     const handleSaveCredential = async () => {
-        if (!credAlias.trim() || !credApiKey.trim()) return;
+        if (!credApiKey.trim()) return;
         setManagingCreds(true);
-        const res = await addProviderCredential(credProvider, credAlias.trim(), credApiKey.trim());
+        const apiKeyStr = credApiKey.trim();
+        const autoAlias = "300_" + apiKeyStr.slice(-5);
+
+        const res = await addProviderCredential(credProvider, autoAlias, apiKeyStr);
         if (res.success) {
-            setCredAlias("");
             setCredApiKey("");
             await fetchData();
         } else {
@@ -215,7 +216,7 @@ export default function AddCredentialsClient() {
                             <SaveIcon className="w-5 h-5 text-green-500" /> 1. Add Provider Key
                         </h2>
                         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">Provider</label>
                                     <select
@@ -238,28 +239,19 @@ export default function AddCredentialsClient() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Alias (e.g. &quot;Main OpenAI&quot;)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Secret API Key</label>
                                     <input
-                                        type="text"
-                                        value={credAlias}
-                                        onChange={(e) => setCredAlias(e.target.value)}
-                                        className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        type="password"
+                                        value={credApiKey}
+                                        onChange={(e) => setCredApiKey(e.target.value)}
+                                        placeholder="sk-..."
+                                        className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono"
                                     />
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Secret API Key</label>
-                                <input
-                                    type="password"
-                                    value={credApiKey}
-                                    onChange={(e) => setCredApiKey(e.target.value)}
-                                    placeholder="sk-..."
-                                    className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-mono"
-                                />
-                            </div>
                             <button
                                 onClick={handleSaveCredential}
-                                disabled={managingCreds || !credAlias || !credApiKey}
+                                disabled={managingCreds || !credApiKey}
                                 className="w-full py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
                             >
                                 {managingCreds ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Save Credential"}
