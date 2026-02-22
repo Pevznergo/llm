@@ -274,7 +274,7 @@ export async function bulkCreateModels(
                         [templateName]
                     );
                     if (rldRes.rows.length > 0) {
-                        newParams.max_requests_per_day = Number(rldRes.rows[0].rld);
+                        newParams.max_requests_per_day = parseInt(rldRes.rows[0].rld, 10);
                     }
                 } finally {
                     costsClient.release();
@@ -806,26 +806,43 @@ export async function getDailyModelLimits() {
     await checkAdmin();
     try {
         const client = await getLitellmDb().connect();
-
         const connectedMap = new Map<string, number>();
+
+        // Try getting through LiteLLM API first (This decrypts litellm_params natively)
+        try {
+            const { getModels } = await import("@/lib/litellm");
+            const liteModels = await getModels();
+            if (liteModels && liteModels.length > 0) {
+                for (const m of liteModels) {
+                    const mName = m.id;
+                    const rld = m.litellm_params?.max_requests_per_day || 0;
+                    connectedMap.set(mName, (connectedMap.get(mName) || 0) + Number(rld));
+                }
+            }
+        } catch (apiErr) {
+            console.warn("LiteLLM API fetch failed in Limits, falling back to raw DB...");
+        }
+
         let usageRows: any[] = [];
 
         try {
-            // Parse models from DB, extracting the unencrypted structure manually if possible
-            const modelResult = await client.query(`SELECT model_name, litellm_params FROM "LiteLLM_ProxyModelTable"`);
-            for (const row of modelResult.rows) {
-                const p = row.litellm_params;
-                const mName = row.model_name;
+            // Only parse DB explicitly if API mapping missed it (e.g local dev without proxy)
+            if (connectedMap.size === 0) {
+                const modelResult = await client.query(`SELECT model_name, litellm_params FROM "LiteLLM_ProxyModelTable"`);
+                for (const row of modelResult.rows) {
+                    const p = row.litellm_params;
+                    const mName = row.model_name;
 
-                // Safety parse if stringified JSON or plain object
-                let paramsObj = typeof p === 'string' ? JSON.parse(p) : p;
+                    // Safety parse if stringified JSON or plain object
+                    let paramsObj = typeof p === 'string' ? JSON.parse(p) : p;
 
-                // LiteLLM might encrypt the whole block, but our `bulkCreateModels` saves max_requests_per_day visibly 
-                // if we don't enable proxy encryption on startup, or it might just be raw if we used our own UI.
-                const rawLim = paramsObj?.max_requests_per_day;
-                const rld = typeof rawLim === 'number' ? rawLim : 0;
+                    // LiteLLM might encrypt the whole block, but our `bulkCreateModels` saves max_requests_per_day visibly 
+                    // if we don't enable proxy encryption on startup, or it might just be raw if we used our own UI.
+                    const rawLim = paramsObj?.max_requests_per_day;
+                    const rld = parseInt(rawLim, 10) || 0;
 
-                connectedMap.set(mName, (connectedMap.get(mName) || 0) + rld);
+                    connectedMap.set(mName, (connectedMap.get(mName) || 0) + rld);
+                }
             }
 
             const usageResult = await client.query(`
