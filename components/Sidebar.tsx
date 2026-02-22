@@ -133,6 +133,16 @@ export function Sidebar() {
                                 Key Usage Stats
                             </Link>
                             <Link
+                                href="/admin/model-limits"
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-orange-600 hover:bg-orange-50",
+                                    pathname === "/admin/model-limits" ? "bg-orange-50" : ""
+                                )}
+                            >
+                                <Activity className="h-5 w-5" />
+                                Daily Model Limits
+                            </Link>
+                            <Link
                                 href="/admin/gcp-generator"
                                 className={cn(
                                     "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-indigo-600 hover:bg-indigo-50",

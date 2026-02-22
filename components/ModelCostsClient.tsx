@@ -9,6 +9,7 @@ type ModelCost = {
     model_name: string;
     prompt_cost_per_1m: string | number;
     completion_cost_per_1m: string | number;
+    rld: string | number;
 };
 
 export default function ModelCostsClient() {
@@ -20,6 +21,7 @@ export default function ModelCostsClient() {
     const [modelName, setModelName] = useState("");
     const [promptCost, setPromptCost] = useState("");
     const [completionCost, setCompletionCost] = useState("");
+    const [rld, setRld] = useState("");
 
     const fetchData = async () => {
         setLoading(true);
@@ -43,18 +45,19 @@ export default function ModelCostsClient() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!modelName || !promptCost || !completionCost) {
-            toast.error("All fields are required");
+            toast.error("All required fields must be filled");
             return;
         }
 
         setIsSaving(true);
         try {
-            const res = await saveModelCost(modelName, parseFloat(promptCost), parseFloat(completionCost));
+            const res = await saveModelCost(modelName, parseFloat(promptCost), parseFloat(completionCost), parseInt(rld || "0"));
             if (res.success) {
                 toast.success("Model cost saved!");
                 setModelName("");
                 setPromptCost("");
                 setCompletionCost("");
+                setRld("");
                 fetchData();
             } else {
                 toast.error(res.error || "Failed to save cost");
@@ -85,6 +88,7 @@ export default function ModelCostsClient() {
         setModelName(cost.model_name);
         setPromptCost(cost.prompt_cost_per_1m.toString());
         setCompletionCost(cost.completion_cost_per_1m.toString());
+        setRld(cost.rld ? cost.rld.toString() : "");
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -144,7 +148,20 @@ export default function ModelCostsClient() {
                             />
                         </div>
                     </div>
-                    <div className="md:col-span-4 mt-2">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            RLD <span className="text-gray-400 text-xs font-normal">(Requests/Day)</span>
+                        </label>
+                        <input
+                            type="number"
+                            step="1"
+                            value={rld}
+                            onChange={(e) => setRld(e.target.value)}
+                            placeholder="Optional"
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                        />
+                    </div>
+                    <div className="md:col-span-5 mt-2">
                         <button
                             type="submit"
                             disabled={isSaving}
@@ -175,6 +192,7 @@ export default function ModelCostsClient() {
                                     <th className="px-6 py-3">Model Name</th>
                                     <th className="px-6 py-3">Prompt / 1M</th>
                                     <th className="px-6 py-3">Completion / 1M</th>
+                                    <th className="px-6 py-3">RLD (Per Day)</th>
                                     <th className="px-6 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -184,6 +202,7 @@ export default function ModelCostsClient() {
                                         <td className="px-6 py-4 font-mono text-gray-800">{cost.model_name}</td>
                                         <td className="px-6 py-4 text-gray-600">${Number(cost.prompt_cost_per_1m).toFixed(4)}</td>
                                         <td className="px-6 py-4 text-gray-600">${Number(cost.completion_cost_per_1m).toFixed(4)}</td>
+                                        <td className="px-6 py-4 text-gray-600">{cost.rld ? cost.rld : <span className="text-gray-400 italic">None</span>}</td>
                                         <td className="px-6 py-4 text-right space-x-2">
                                             <button
                                                 onClick={() => handleEdit(cost)}

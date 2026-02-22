@@ -265,6 +265,24 @@ export async function bulkCreateModels(
                 newParams.output_cost_per_token = parseFloat(Number(newParams.output_cost_per_token).toFixed(10));
             }
 
+            // Sync RLD (rate limit daily) if configured
+            try {
+                const costsClient = await getLitellmDb().connect();
+                try {
+                    const rldRes = await costsClient.query(
+                        `SELECT rld FROM admin_key_usage_model_costs WHERE model_name = $1 AND rld > 0`,
+                        [templateName]
+                    );
+                    if (rldRes.rows.length > 0) {
+                        newParams.max_requests_per_day = Number(rldRes.rows[0].rld);
+                    }
+                } finally {
+                    costsClient.release();
+                }
+            } catch (rErr) {
+                console.warn("Failed to check rld for model", templateName, rErr);
+            }
+
             if (rawApiKey.trim()) {
                 newParams.api_key = rawApiKey.trim();
             }
@@ -661,7 +679,7 @@ export async function getModelCosts() {
         const client = await getLitellmDb().connect();
         try {
             const result = await client.query(`
-                SELECT model_name, prompt_cost_per_1m, completion_cost_per_1m, created_at
+                SELECT model_name, prompt_cost_per_1m, completion_cost_per_1m, created_at, COALESCE(rld, 0) as rld
                 FROM admin_key_usage_model_costs
                 ORDER BY model_name ASC
                 `);
@@ -675,19 +693,20 @@ export async function getModelCosts() {
     }
 }
 
-export async function saveModelCost(modelName: string, promptCost: number, completionCost: number) {
+export async function saveModelCost(modelName: string, promptCost: number, completionCost: number, rld: number = 0) {
     await checkAdmin();
     try {
         const client = await getLitellmDb().connect();
         try {
             await client.query(`
-                INSERT INTO admin_key_usage_model_costs(model_name, prompt_cost_per_1m, completion_cost_per_1m)
-            VALUES($1, $2, $3)
+                INSERT INTO admin_key_usage_model_costs(model_name, prompt_cost_per_1m, completion_cost_per_1m, rld)
+            VALUES($1, $2, $3, $4)
                 ON CONFLICT(model_name) 
                 DO UPDATE SET
             prompt_cost_per_1m = EXCLUDED.prompt_cost_per_1m,
-                completion_cost_per_1m = EXCLUDED.completion_cost_per_1m
-                    `, [modelName.trim(), promptCost, completionCost]);
+                completion_cost_per_1m = EXCLUDED.completion_cost_per_1m,
+                rld = EXCLUDED.rld
+                    `, [modelName.trim(), promptCost, completionCost, rld]);
 
             revalidatePath("/admin/model-costs");
             revalidatePath("/admin/key-usage");
@@ -776,5 +795,44 @@ export async function toggleTagStatus(tagName: string, status: string) {
     } catch (e: any) {
         console.error("Failed to update tag status:", e);
         return { success: false, error: e.message };
+    }
+}
+
+// ==========================================
+// DAILY MODEL LIMITS ACTIONS
+// ==========================================
+
+export async function getDailyModelLimits() {
+    await checkAdmin();
+    try {
+        const client = await getLitellmDb().connect();
+        try {
+            const usageResult = await client.query(`
+                WITH DailyUsage AS (
+                    SELECT 
+                        s.model,
+                        COUNT(s.request_id) as consumed_today
+                    FROM "LiteLLM_SpendLogs" s
+                    WHERE s.status = 'success'
+                      AND s.api_key != 'litellm-internal-health-check'
+                      AND s.created_at >= CURRENT_DATE
+                    GROUP BY s.model
+                )
+                SELECT 
+                    mc.model_name,
+                    COALESCE(mc.rld, 0) as rld,
+                    COALESCE(du.consumed_today, 0) as consumed_today
+                FROM admin_key_usage_model_costs mc
+                LEFT JOIN DailyUsage du ON du.model = mc.model_name
+                ORDER BY mc.model_name
+            `);
+
+            return { success: true, limits: usageResult.rows };
+        } finally {
+            client.release();
+        }
+    } catch (e: any) {
+        console.error("Failed to fetch daily model limits:", e);
+        return { success: false, error: e.message, limits: [] };
     }
 }
