@@ -817,14 +817,21 @@ export async function getDailyModelLimits() {
                       AND s.api_key != 'litellm-internal-health-check'
                       AND s.created_at >= CURRENT_DATE
                     GROUP BY s.model
+                ),
+                ConnectedModels AS (
+                    SELECT 
+                        model_name,
+                        SUM(COALESCE((litellm_params->>'max_requests_per_day')::numeric, 0)) as total_rld
+                    FROM "LiteLLM_ProxyModelTable"
+                    GROUP BY model_name
                 )
                 SELECT 
-                    mc.model_name,
-                    COALESCE(mc.rld, 0) as rld,
+                    cm.model_name,
+                    cm.total_rld as rld,
                     COALESCE(du.consumed_today, 0) as consumed_today
-                FROM admin_key_usage_model_costs mc
-                LEFT JOIN DailyUsage du ON du.model = mc.model_name
-                ORDER BY mc.model_name
+                FROM ConnectedModels cm
+                LEFT JOIN DailyUsage du ON du.model = cm.model_name
+                ORDER BY cm.model_name
             `);
 
             return { success: true, limits: usageResult.rows };

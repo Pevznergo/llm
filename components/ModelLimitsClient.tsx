@@ -34,8 +34,8 @@ export default function ModelLimitsClient() {
         fetchData();
     }, []);
 
-    // Filter to only show models that have a limit configured OR have been consumed today
-    const activeData = limits.filter(l => Number(l.rld) > 0 || Number(l.consumed_today) > 0);
+    // Show all connected models
+    const activeData = limits;
 
     return (
         <div className="max-w-5xl mx-auto p-6 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -64,7 +64,7 @@ export default function ModelLimitsClient() {
                 </div>
             ) : activeData.length === 0 ? (
                 <div className="bg-gray-50 rounded-xl border border-dashed border-gray-300 p-8 text-center">
-                    <p className="text-gray-500">No models with active requested limits or usage today.</p>
+                    <p className="text-gray-500">No connected models found.</p>
                 </div>
             ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
