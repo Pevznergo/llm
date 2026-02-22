@@ -805,20 +805,29 @@ export async function toggleTagStatus(tagName: string, status: string) {
 export async function getDailyModelLimits() {
     await checkAdmin();
     try {
-        const { getModels } = await import("@/lib/litellm");
-        const liteModels = await getModels();
+        const client = await getLitellmDb().connect();
 
         const connectedMap = new Map<string, number>();
-
-        for (const m of liteModels) {
-            const mName = m.id;
-            const rld = m.litellm_params?.max_requests_per_day || 0;
-            connectedMap.set(mName, (connectedMap.get(mName) || 0) + Number(rld));
-        }
-
         let usageRows: any[] = [];
-        const client = await getLitellmDb().connect();
+
         try {
+            // Parse models from DB, extracting the unencrypted structure manually if possible
+            const modelResult = await client.query(`SELECT model_name, litellm_params FROM "LiteLLM_ProxyModelTable"`);
+            for (const row of modelResult.rows) {
+                const p = row.litellm_params;
+                const mName = row.model_name;
+
+                // Safety parse if stringified JSON or plain object
+                let paramsObj = typeof p === 'string' ? JSON.parse(p) : p;
+
+                // LiteLLM might encrypt the whole block, but our `bulkCreateModels` saves max_requests_per_day visibly 
+                // if we don't enable proxy encryption on startup, or it might just be raw if we used our own UI.
+                const rawLim = paramsObj?.max_requests_per_day;
+                const rld = typeof rawLim === 'number' ? rawLim : 0;
+
+                connectedMap.set(mName, (connectedMap.get(mName) || 0) + rld);
+            }
+
             const usageResult = await client.query(`
                 SELECT 
                     model,
@@ -830,6 +839,7 @@ export async function getDailyModelLimits() {
                 GROUP BY model
             `);
             usageRows = usageResult.rows;
+
         } finally {
             client.release();
         }
