@@ -6,6 +6,7 @@ import { Loader2, Activity, Settings, TrendingUp } from "lucide-react";
 import toast from "react-hot-toast";
 
 type ModelLimit = {
+    id?: string;
     model_name: string;
     rld: string | number;
     consumed_today: string | number;
@@ -73,6 +74,7 @@ export default function ModelLimitsClient() {
                             <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-medium">
                                 <tr>
                                     <th className="px-6 py-3">Model Name</th>
+                                    <th className="px-6 py-3">Model ID</th>
                                     <th className="px-6 py-3">Today&apos;s Usage</th>
                                     <th className="px-6 py-3">Daily Limit (RLD)</th>
                                     <th className="px-6 py-3 w-1/4">Capacity</th>
@@ -94,6 +96,7 @@ export default function ModelLimitsClient() {
                                     return (
                                         <tr key={idx} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 font-mono text-gray-800">{limit.model_name}</td>
+                                            <td className="px-6 py-4 font-mono text-xs text-gray-500">{limit.id || '-'}</td>
                                             <td className="px-6 py-4 text-gray-800 font-medium">{consumed.toLocaleString()} reqs</td>
                                             <td className="px-6 py-4 text-gray-500">
                                                 {hasLimit ? <span className="font-semibold text-gray-700">{rld.toLocaleString()}</span> : <span className="italic text-gray-400">Unlimited</span>}

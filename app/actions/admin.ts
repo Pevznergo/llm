@@ -806,43 +806,31 @@ export async function getDailyModelLimits() {
     await checkAdmin();
     try {
         const client = await getLitellmDb().connect();
-        const connectedMap = new Map<string, number>();
-
-        // Try getting through LiteLLM API first (This decrypts litellm_params natively)
-        try {
-            const { getModels } = await import("@/lib/litellm");
-            const liteModels = await getModels();
-            if (liteModels && liteModels.length > 0) {
-                for (const m of liteModels) {
-                    const mName = m.id;
-                    const rld = m.litellm_params?.max_requests_per_day || 0;
-                    connectedMap.set(mName, (connectedMap.get(mName) || 0) + Number(rld));
-                }
-            }
-        } catch (apiErr) {
-            console.warn("LiteLLM API fetch failed in Limits, falling back to raw DB...");
-        }
-
+        const connectedMap = new Map<string, { model_name: string, rld: number }>();
         let usageRows: any[] = [];
 
         try {
-            // Only parse DB explicitly if API mapping missed it (e.g local dev without proxy)
-            if (connectedMap.size === 0) {
-                const modelResult = await client.query(`SELECT model_name FROM "LiteLLM_ProxyModelTable"`);
-                for (const row of modelResult.rows) {
-                    const mName = row.model_name;
-                    connectedMap.set(mName, 0); // Default to 0, updated below
-                }
+            // First fetch all models and their unique IDs from DB
+            const modelResult = await client.query(`SELECT model_name, model_info FROM "LiteLLM_ProxyModelTable"`);
+            for (const row of modelResult.rows) {
+                const mName = row.model_name;
+                const mId = row.model_info?.id || mName;
+                connectedMap.set(mId, { model_name: mName, rld: 0 }); // Default to 0, updated below
             }
 
             // Sync actual RLD limits from our settings table
+            // This table applies RLD by model_name, so any model_info with this model_name inherits it
             try {
                 const costsRes = await client.query(`SELECT model_name, rld FROM admin_key_usage_model_costs WHERE rld > 0`);
+                const rldByModelName = new Map<string, number>();
                 for (const r of costsRes.rows) {
-                    const mName = r.model_name;
-                    const rld = Number(r.rld) || 0;
-                    if (rld > 0) {
-                        connectedMap.set(mName, rld);
+                    rldByModelName.set(r.model_name, Number(r.rld) || 0);
+                }
+
+                // apply RLD to each unique ID proxy model
+                for (const [id, data] of Array.from(connectedMap.entries())) {
+                    if (rldByModelName.has(data.model_name)) {
+                        data.rld = rldByModelName.get(data.model_name)!;
                     }
                 }
             } catch (rldErr) {
@@ -851,13 +839,14 @@ export async function getDailyModelLimits() {
 
             const usageResult = await client.query(`
                 SELECT 
+                    model_id,
                     model,
                     COUNT(request_id) as consumed_today
                 FROM "LiteLLM_SpendLogs"
                 WHERE status = 'success'
                   AND api_key != 'litellm-internal-health-check'
                   AND "startTime" >= CURRENT_DATE
-                GROUP BY model
+                GROUP BY model_id, model
             `);
             usageRows = usageResult.rows;
 
@@ -867,19 +856,22 @@ export async function getDailyModelLimits() {
 
         const usageMap = new Map<string, number>();
         for (const r of usageRows) {
-            usageMap.set(r.model, parseInt(r.consumed_today) || 0);
+            // Priority is model_id, fallback to model if empty
+            const key = r.model_id ? r.model_id : r.model;
+            usageMap.set(key, (usageMap.get(key) || 0) + (parseInt(r.consumed_today) || 0));
         }
 
         const limits = [];
-        for (const [modelName, rld] of Array.from(connectedMap.entries())) {
+        for (const [id, data] of Array.from(connectedMap.entries())) {
             limits.push({
-                model_name: modelName,
-                rld: rld,
-                consumed_today: usageMap.get(modelName) || 0
+                id: id,
+                model_name: data.model_name,
+                rld: data.rld,
+                consumed_today: usageMap.get(id) || usageMap.get(data.model_name) || 0
             });
         }
 
-        // Sort alphabetically
+        // Sort alphabetically by model_name
         limits.sort((a, b) => a.model_name.localeCompare(b.model_name));
 
         return { success: true, limits };
