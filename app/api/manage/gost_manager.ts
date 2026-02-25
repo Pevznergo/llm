@@ -4,11 +4,6 @@ import path from 'path';
 
 const execAsync = promisify(exec);
 
-// Simple in-memory tracker or dynamic port assigner.
-// In a real production system with multiple restarts, 
-// we'd query the DB for max port in use, but this works for 4-10 models.
-let currentPort = 8080;
-
 /**
  * Normalize proxy URL format.
  * Accepts both standard `socks5h://user:pass@ip:port`
@@ -25,8 +20,11 @@ function normalizeProxyUrl(rawUrl: string): string {
     return rawUrl;
 }
 
+/** Deterministic port per model group: 8090 + modelId (base 8090 to avoid common port conflicts) */
+const gostPort = (modelId: number) => 8090 + modelId;
+
 export async function spawnGostContainer(modelId: number, proxyUrl: string): Promise<{ containerName: string, internalApiBase: string }> {
-    const port = ++currentPort;
+    const port = gostPort(modelId);
     const containerName = `gost_proxy_model_${modelId}`;
     const normalizedProxy = normalizeProxyUrl(proxyUrl);
 

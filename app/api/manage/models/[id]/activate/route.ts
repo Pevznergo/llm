@@ -47,20 +47,30 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
         const registeredIds: string[] = [];
         const errors: string[] = [];
 
+        // When Gost is running, route LiteLLM → Google through Gost as HTTP forward proxy
+        const gostProxyUrl = gostContainerId ? `http://${gostContainerId}:${8090 + id}` : undefined;
+
         for (const modelDef of modelsConfig) {
             try {
                 const internalId = `managed_group_${id}_${modelDef.litellm_name.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
+                const litellmParams: Record<string, unknown> = {
+                    model: modelDef.litellm_name,
+                    api_key: modelDef.api_key,
+                    api_base: modelDef.api_base, // real provider URL — e.g. generativelanguage.googleapis.com
+                    input_cost_per_token: modelDef.pricing_input,
+                    output_cost_per_token: modelDef.pricing_output,
+                    custom_llm_provider: 'openai',
+                };
+
+                // If Gost proxy is running, route all requests for this model through it
+                if (gostProxyUrl) {
+                    litellmParams.proxy = gostProxyUrl; // Gost is HTTP forward proxy → SOCKS5 upstream
+                }
+
                 const res = await axios.post(`${LITELLM_URL}/model/new`, {
                     model_name: modelDef.public_name,
-                    litellm_params: {
-                        model: modelDef.litellm_name,
-                        api_key: modelDef.api_key,
-                        api_base: modelDef.api_base || apiBase,
-                        input_cost_per_token: modelDef.pricing_input,
-                        output_cost_per_token: modelDef.pricing_output,
-                        custom_llm_provider: 'openai',
-                    },
+                    litellm_params: litellmParams,
                     model_info: { id: internalId, base_model: modelDef.public_name },
                 }, {
                     headers: { Authorization: `Bearer ${masterKey}` },
