@@ -88,7 +88,7 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
         if user_api_key_dict is not None:
             raise HTTPException(
                 status_code=500,
-                detail={"code": 500, "msg": "The server is currently being maintained, please try again later~"}
+                detail="The server is currently being maintained, please try again later~"
             )
 
         try:
