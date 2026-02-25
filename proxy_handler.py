@@ -110,6 +110,12 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
                 data["kwargs"]["http_client"] = self.client_cache[proxy]
                 data["client"] = self.client_cache[proxy]
                 
+                # INJECT METADATA for LiteLLM UI Logs
+                # This ensures you can see which proxy was used directly in the dashboard
+                if "metadata" not in data:
+                    data["metadata"] = {}
+                data["metadata"]["socks"] = "yes"
+                
                 key_preview = str(data.get("api_key", params.get("api_key", "MISSING_KEY")))[0:15]
                 print(f"[ProxyIntercept] Successfully bound SOCKS proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
         except Exception as e:
