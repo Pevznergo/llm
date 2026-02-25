@@ -19,6 +19,7 @@ export default function ManageDashboard() {
     const [templateData, setTemplateData] = useState({
         model_name: "",
         api_key: "",
+        api_base: "",
         proxy_url: "",
         max_requests_per_day: 100
     });
@@ -55,8 +56,9 @@ export default function ManageDashboard() {
             if (formMode === 'template') {
                 params = {
                     api_key: templateData.api_key,
-                    proxy_url: templateData.proxy_url,
-                    model: "openai/" + templateData.model_name
+                    api_base: templateData.api_base || undefined,
+                    proxy_url: templateData.proxy_url || undefined,
+                    model: templateData.model_name
                 };
             } else {
                 try {
@@ -98,13 +100,17 @@ export default function ManageDashboard() {
                     model_name: templateData.model_name,
                     daily_request_limit: Number(templateData.max_requests_per_day),
                     litellm_params: {
-                        model: "openai/" + templateData.model_name,
+                        model: templateData.model_name,
                         api_key: templateData.api_key,
+                        api_base: templateData.api_base || undefined,
                         proxy_url: templateData.proxy_url || undefined,
-                        custom_llm_provider: "openai"
+                        // We do not force custom_llm_provider. LiteLLM will infer from model name (e.g., gemini/gemini-2.5-pro)
+                        // If they are using an OpenAI compatible proxy, they should prefix model with openai/
                     },
                     model_info: {
-                        db_model: true
+                        db_model: true,
+                        id: templateData.model_name,
+                        base_model: templateData.model_name
                     }
                 };
             } else {
@@ -127,7 +133,7 @@ export default function ManageDashboard() {
                 toast.success("Model added to queue");
                 setIsAddModalOpen(false);
                 setAccount("");
-                setTemplateData({ model_name: "", api_key: "", proxy_url: "", max_requests_per_day: 100 });
+                setTemplateData({ model_name: "", api_key: "", api_base: "", proxy_url: "", max_requests_per_day: 100 });
                 setJsonData("");
                 setTestResult(null);
                 fetchModels();
@@ -333,7 +339,7 @@ export default function ManageDashboard() {
                                                 value={templateData.model_name}
                                                 onChange={e => setTemplateData({ ...templateData, model_name: e.target.value })}
                                                 className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none placeholder-slate-600"
-                                                placeholder="Model name"
+                                                placeholder="Model name (Acts as TAG)"
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -356,14 +362,25 @@ export default function ManageDashboard() {
                                             placeholder="sk-..."
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm text-slate-400 font-bold tracking-wide">PROXY URL (Base API URL)</label>
-                                        <input
-                                            value={templateData.proxy_url}
-                                            onChange={e => setTemplateData({ ...templateData, proxy_url: e.target.value })}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none"
-                                            placeholder="https://...."
-                                        />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-slate-400 font-bold tracking-wide">API BASE (Optional)</label>
+                                            <input
+                                                value={templateData.api_base}
+                                                onChange={e => setTemplateData({ ...templateData, api_base: e.target.value })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none"
+                                                placeholder="https://api.openai.com/v1"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-slate-400 font-bold tracking-wide">HTTP PROXY URL (Optional)</label>
+                                            <input
+                                                value={templateData.proxy_url}
+                                                onChange={e => setTemplateData({ ...templateData, proxy_url: e.target.value })}
+                                                className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none"
+                                                placeholder="http://proxy:8080"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
