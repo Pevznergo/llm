@@ -116,11 +116,7 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
                 if proxy not in self.client_cache:
                     self.client_cache[proxy] = httpx.AsyncClient(proxy=proxy)
                 
-                # LiteLLM/OpenAI v1+ expects `http_client`, not `client`
-                if "kwargs" not in data:
-                    data["kwargs"] = {}
-                data["kwargs"]["http_client"] = self.client_cache[proxy]
-                
+                data["client"] = self.client_cache[proxy]
                 key_preview = str(data.get("api_key", params.get("api_key", "MISSING_KEY")))[0:15]
                 print(f"[ProxyIntercept] Successfully bound proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
         except Exception as e:
