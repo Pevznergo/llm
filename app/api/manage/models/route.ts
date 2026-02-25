@@ -3,23 +3,43 @@ import { sql } from '@/lib/db';
 import { spawnGostContainer } from '../gost_manager';
 
 /** 
- * Run schema migrations inline so they apply even without a server restart.
- * All statements are safe to run multiple times.
+ * Create table + run schema migrations inline.
+ * All statements are idempotent — safe to call on every request.
  */
 async function ensureMigrations() {
-    // These are idempotent — safe to call on every POST
+    // Create table if it has never been initialised (cold start / no server restart)
+    await sql`
+        CREATE TABLE IF NOT EXISTS managed_models (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            api_key VARCHAR(255),
+            proxy_url VARCHAR(255),
+            gost_container_id VARCHAR(255),
+            litellm_model_id VARCHAR(255),
+            daily_request_limit INTEGER,
+            requests_today INTEGER DEFAULT 0,
+            spend_limit DECIMAL(10, 4) DEFAULT 300,
+            spend_today DECIMAL(10, 4) DEFAULT 0,
+            models_config JSONB DEFAULT '[]'::jsonb,
+            litellm_model_ids JSONB DEFAULT '[]'::jsonb,
+            cooldown_until TIMESTAMP,
+            status VARCHAR(50) DEFAULT 'queued',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+    // Idempotent column additions for existing tables
     await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_limit DECIMAL(10, 4) DEFAULT 300`;
     await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_today DECIMAL(10, 4) DEFAULT 0`;
     await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS models_config JSONB DEFAULT '[]'::jsonb`;
     await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS litellm_model_ids JSONB DEFAULT '[]'::jsonb`;
     await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMP`;
-    // Make legacy NOT NULL columns optional (keys are now per-model inside models_config)
     try { await sql`ALTER TABLE managed_models ALTER COLUMN api_key DROP NOT NULL`; } catch { }
     try { await sql`ALTER TABLE managed_models ALTER COLUMN daily_request_limit DROP NOT NULL`; } catch { }
 }
 
 export async function GET() {
     try {
+        await ensureMigrations();
         const models = await sql`
             SELECT * FROM managed_models 
             ORDER BY 
