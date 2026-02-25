@@ -12,6 +12,9 @@ export default function ManageDashboard() {
 
     const [formMode, setFormMode] = useState<'template' | 'json'>('template');
 
+    // Shared state
+    const [account, setAccount] = useState("");
+
     // Form state for Template
     const [templateData, setTemplateData] = useState({
         model_name: "",
@@ -91,6 +94,7 @@ export default function ManageDashboard() {
                     return;
                 }
                 payload = {
+                    account: account || undefined,
                     model_name: templateData.model_name,
                     daily_request_limit: Number(templateData.max_requests_per_day),
                     litellm_params: {
@@ -106,6 +110,7 @@ export default function ManageDashboard() {
             } else {
                 const parsed = JSON.parse(jsonData);
                 payload = {
+                    account: account || parsed.account || undefined,
                     model_name: parsed.model_name,
                     daily_request_limit: Number(jsonDailyLimit),
                     litellm_params: parsed.litellm_params,
@@ -121,6 +126,7 @@ export default function ManageDashboard() {
             if (res.data.success) {
                 toast.success("Model added to queue");
                 setIsAddModalOpen(false);
+                setAccount("");
                 setTemplateData({ model_name: "", api_key: "", proxy_url: "", max_requests_per_day: 100 });
                 setJsonData("");
                 setTestResult(null);
@@ -162,7 +168,10 @@ export default function ManageDashboard() {
     const ModelCard = ({ model }: { model: any }) => (
         <div className="bg-slate-800 rounded-lg p-4 border border-slate-700 shadow flex flex-col gap-2 relative transition-all duration-300 hover:border-blue-500">
             <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-                <h3 className="text-lg font-mono text-yellow-500 font-bold">{model.model_name.toUpperCase()}</h3>
+                <div className="flex flex-col">
+                    <h3 className="text-lg font-mono text-yellow-500 font-bold">{model.model_name.toUpperCase()}</h3>
+                    {model.account && <span className="text-xs text-slate-400 mt-1">📧 {model.account}</span>}
+                </div>
                 <span className={`text-xs px-2 py-1 rounded-full ${model.status === 'active' ? 'bg-green-500/20 text-green-400' :
                     model.status === 'queued' ? 'bg-blue-500/20 text-blue-400' :
                         model.status === 'exhausted' ? 'bg-orange-500/20 text-orange-400' :
@@ -295,6 +304,26 @@ export default function ManageDashboard() {
                         </div>
 
                         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+
+                            {/* Shared Account Field */}
+                            <div className="space-y-2">
+                                <label className="text-sm text-slate-400 font-bold tracking-wide">ACCOUNT (Email)</label>
+                                <input
+                                    list="accounts-list"
+                                    value={account}
+                                    onChange={e => setAccount(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none"
+                                    placeholder="example@email.com"
+                                />
+                                <datalist id="accounts-list">
+                                    {Array.from(new Set(models.map(m => m.account).filter(Boolean))).map((acc: any) => (
+                                        <option key={acc} value={acc} />
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            <hr className="border-slate-800" />
+
                             {formMode === 'template' ? (
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
