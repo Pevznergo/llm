@@ -264,12 +264,16 @@ export async function initDatabase() {
       `;
     }
 
-    // Model Templates table (New)
+    // Model Templates table (For Airport Dispatcher UI)
     await sql`
-      CREATE TABLE IF NOT EXISTS model_templates (
+      CREATE TABLE IF NOT EXISTS model_dispatcher_templates (
         id SERIAL PRIMARY KEY,
         template_name VARCHAR(255) UNIQUE NOT NULL,
-        provider VARCHAR(255) NOT NULL,
+        litellm_name VARCHAR(255) NOT NULL,
+        public_name VARCHAR(255) NOT NULL,
+        api_base VARCHAR(1024),
+        pricing_input DECIMAL(10, 6) DEFAULT 0,
+        pricing_output DECIMAL(10, 6) DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
@@ -523,6 +527,16 @@ export async function initDatabase() {
       )
     `;
 
+    // Migration: Group-based architecture scaling for managed models
+    try {
+      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_limit DECIMAL(10, 4) DEFAULT 300`;
+      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_today DECIMAL(10, 4) DEFAULT 0`;
+      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS models_config JSONB DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS litellm_model_ids JSONB DEFAULT '[]'::jsonb`;
+    } catch (e) {
+      console.warn("managed_models migration warning:", e);
+    }
+
     // --- Strict Table Deletion/Truncation Protection ---
     try {
       console.log('Setting up strict database protection rules...');
@@ -531,11 +545,11 @@ export async function initDatabase() {
       await sql`
         CREATE OR REPLACE FUNCTION prevent_drop_table()
         RETURNS event_trigger AS $$
-        BEGIN
-          IF tg_tag IN ('DROP TABLE', 'DROP SCHEMA') THEN
+      BEGIN
+          IF tg_tag IN('DROP TABLE', 'DROP SCHEMA') THEN
             RAISE EXCEPTION 'Удаление таблиц СТРОГО ЗАПРЕЩЕНО! (DROP / TRUNCATE is blocked)';
           END IF;
-        END;
+      END;
         $$ LANGUAGE plpgsql;
       `;
 
@@ -550,10 +564,10 @@ export async function initDatabase() {
       await sql`
         CREATE OR REPLACE FUNCTION prevent_truncate_table()
         RETURNS trigger AS $$
-        BEGIN
+      BEGIN
           RAISE EXCEPTION 'Очистка таблиц СТРОГО ЗАПРЕЩЕНА! (TRUNCATE is blocked)';
           RETURN NULL;
-        END;
+      END;
         $$ LANGUAGE plpgsql;
       `;
 
@@ -562,7 +576,7 @@ export async function initDatabase() {
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-      `;
+        `;
 
       for (const row of tables) {
         const tName = row.table_name;
@@ -573,7 +587,7 @@ export async function initDatabase() {
             BEFORE TRUNCATE ON "${tName}"
             FOR EACH STATEMENT
             EXECUTE FUNCTION prevent_truncate_table();
-        `] as any as TemplateStringsArray);
+      `] as any as TemplateStringsArray);
       }
 
       console.log('Database protection applied successfully.');
@@ -606,8 +620,8 @@ export async function setFloodWait(seconds: number) {
   const bufferSeconds = seconds + 1;
   await sql`
         INSERT INTO flood_control(key, expires_at)
-    VALUES('telegram_global', NOW() + (${bufferSeconds} || ' seconds')::INTERVAL)
+      VALUES('telegram_global', NOW() + (${bufferSeconds} || ' seconds')::INTERVAL)
         ON CONFLICT(key) DO UPDATE SET
-    expires_at = EXCLUDED.expires_at
-      `;
+      expires_at = EXCLUDED.expires_at
+        `;
 }

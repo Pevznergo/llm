@@ -152,6 +152,16 @@ export function Sidebar() {
                                 <CloudFog className="h-5 w-5" />
                                 GCP API Factory
                             </Link>
+                            <Link
+                                href="/manage"
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-pink-600 hover:bg-pink-50",
+                                    pathname === "/manage" ? "bg-pink-50" : ""
+                                )}
+                            >
+                                <Activity className="h-5 w-5" />
+                                Airport Dispatcher
+                            </Link>
                         </div>
                     )}
                 </nav>

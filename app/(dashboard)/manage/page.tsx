@@ -1,363 +1,416 @@
-'use client';
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Trash2, TestTube2, Save, ChevronDown, ChevronUp, Loader2, PlugZap } from "lucide-react";
 
-import { useState, useEffect } from 'react';
-import { Loader2, Plus, RefreshCw, Activity, Server, ZapOff, Check, X } from "lucide-react";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export default function DispatcherDashboard() {
-    const [models, setModels] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+interface ModelConfig {
+    litellm_name: string;   // internal: e.g., "openai/gemini-2.5-pro"
+    public_name: string;    // e.g., "gemini-2.5-pro"
+    api_base: string;       // e.g., "https://generativelanguage.googleapis.com/v1beta/openai/"
+    pricing_input: number;  // per 1M tokens, in USD
+    pricing_output: number;
+}
 
-    // Add Model Modal State
+interface ModelGroup {
+    id: number;
+    name: string;
+    api_key: string;
+    proxy_url: string | null;
+    gost_container_id: string | null;
+    spend_limit: number;
+    spend_today: number;
+    models_config: ModelConfig[];
+    litellm_model_ids: string[];
+    status: "active" | "queued" | "exhausted";
+    created_at: string;
+}
+
+interface Template {
+    id: number;
+    template_name: string;
+    litellm_name: string;
+    public_name: string;
+    api_base: string;
+    pricing_input: number;
+    pricing_output: number;
+}
+
+// ─── Default blank model config ───────────────────────────────────────────────
+
+const blankModel = (): ModelConfig => ({
+    litellm_name: "openai/gemini-2.5-pro",
+    public_name: "gemini-2.5-pro",
+    api_base: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    pricing_input: 0.00000125,
+    pricing_output: 0.000010,
+});
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+const pct = (today: number, limit: number) => Math.min(100, (today / Math.max(limit, 0.01)) * 100).toFixed(0);
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function ManagePage() {
+    const [groups, setGroups] = useState<ModelGroup[]>([]);
+    const [templates, setTemplates] = useState<Template[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // Form state
+    const [groupName, setGroupName] = useState("");
+    const [apiKey, setApiKey] = useState("");
+    const [proxyUrl, setProxyUrl] = useState("");
+    const [spendLimit, setSpendLimit] = useState(300);
+    const [modelList, setModelList] = useState<ModelConfig[]>([blankModel()]);
+    const [saveTemplateName, setSaveTemplateName] = useState("");
+
     const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [testResult, setTestResult] = useState<{ success: boolean, message: string } | null>(null);
+    const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
 
-    const [formData, setFormData] = useState({
-        name: 'gemini-balance-nodes',
-        api_key: '',
-        proxy_url: '',
-        daily_request_limit: 50,
-    });
-
-    const fetchModels = async () => {
-        try {
-            const res = await fetch('/api/manage/models');
-            const data = await res.json();
-            if (data.models) setModels(data.models);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchModels();
-        const interval = setInterval(fetchModels, 30000);
-        return () => clearInterval(interval);
+    const load = useCallback(async () => {
+        setIsLoading(true);
+        const [gr, tpl] = await Promise.all([
+            fetch("/api/manage/models").then(r => r.json()),
+            fetch("/api/manage/templates").then(r => r.json()),
+        ]);
+        setGroups(gr.models || []);
+        setTemplates(tpl.templates || []);
+        setIsLoading(false);
     }, []);
 
-    const handleTest = async () => {
-        if (!formData.api_key || !formData.proxy_url) {
-            alert("API Key and Proxy URL required for testing");
-            return;
-        }
+    useEffect(() => { load(); }, [load]);
 
-        setIsTesting(true);
+    const resetForm = () => {
+        setGroupName(""); setApiKey(""); setProxyUrl("");
+        setSpendLimit(300); setModelList([blankModel()]); setSaveTemplateName("");
         setTestResult(null);
-        try {
-            const res = await fetch('/api/manage/models/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    api_key: formData.api_key,
-                    proxy_url: formData.proxy_url
-                })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setTestResult({ success: true, message: data.message });
-            } else {
-                setTestResult({ success: false, message: data.error });
-            }
-        } catch (e: any) {
-            setTestResult({ success: false, message: e.message });
-        } finally {
-            setIsTesting(false);
-        }
     };
 
-    const handleCreate = async () => {
-        if (!formData.name || !formData.api_key || !formData.daily_request_limit) {
-            alert("Please fill all required fields");
-            return;
-        }
+    // ── Model list helpers ──────────────────────────────────────────────────────
+    const addModel = () => setModelList(prev => [...prev, blankModel()]);
+    const removeModel = (idx: number) => setModelList(prev => prev.filter((_, i) => i !== idx));
+    const updateModel = (idx: number, field: keyof ModelConfig, val: string | number) =>
+        setModelList(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
+    const applyTemplate = (idx: number, tpl: Template) => {
+        setModelList(prev => prev.map((m, i) => i === idx ? {
+            litellm_name: tpl.litellm_name,
+            public_name: tpl.public_name,
+            api_base: tpl.api_base,
+            pricing_input: tpl.pricing_input,
+            pricing_output: tpl.pricing_output,
+        } : m));
+    };
 
+    // ── Save template ───────────────────────────────────────────────────────────
+    const saveAsTemplate = async (model: ModelConfig, name: string) => {
+        if (!name.trim()) return alert("Enter a template name first");
+        const res = await fetch("/api/manage/templates", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ template_name: name, ...model }),
+        });
+        const data = await res.json();
+        if (res.ok) { alert("Template saved!"); load(); setSaveTemplateName(""); }
+        else alert(data.error);
+    };
+
+    // ── Test connection ─────────────────────────────────────────────────────────
+    const testConnection = async () => {
+        if (!apiKey) return alert("Enter an API key first");
+        setIsTesting(true); setTestResult(null);
+        const res = await fetch("/api/manage/models/test", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ api_key: apiKey, proxy_url: proxyUrl || null }),
+        });
+        const data = await res.json();
+        setTestResult({ ok: res.ok, msg: res.ok ? data.message : data.error });
+        setIsTesting(false);
+    };
+
+    // ── Submit new group ────────────────────────────────────────────────────────
+    const submitGroup = async () => {
+        if (!groupName || !apiKey || modelList.length === 0) return alert("Fill in all required fields");
         setIsSubmitting(true);
-        try {
-            const res = await fetch('/api/manage/models', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                alert("Model added to queue and Gost proxy initialized.");
-                setIsModalOpen(false);
-                setFormData({ name: 'gemini-balance-nodes', api_key: '', proxy_url: '', daily_request_limit: 50 });
-                setTestResult(null);
-                fetchModels();
-            } else {
-                alert("Failed to Add: " + data.error);
-            }
-        } catch (e: any) {
-            alert("Error: " + e.message);
-        } finally {
-            setIsSubmitting(false);
-        }
+        const res = await fetch("/api/manage/models", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: groupName, api_key: apiKey, proxy_url: proxyUrl || null, spend_limit: spendLimit, models_config: modelList }),
+        });
+        const data = await res.json();
+        if (res.ok) { setIsModalOpen(false); resetForm(); load(); }
+        else alert(data.error);
+        setIsSubmitting(false);
     };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm("Are you sure? This will kill the Gost Docker container and remove it from LiteLLM.")) return;
-        try {
-            const res = await fetch(`/api/manage/models/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                fetchModels();
-            } else {
-                const data = await res.json();
-                alert("Error: " + data.error);
-            }
-        } catch (e: any) {
-            console.error(e);
-        }
+    // ── Delete group ────────────────────────────────────────────────────────────
+    const deleteGroup = async (id: number) => {
+        if (!confirm("Remove this model group? All associated LiteLLM routes will be deleted.")) return;
+        await fetch(`/api/manage/models/${id}`, { method: "DELETE" });
+        load();
     };
 
-    const activeModels = models.filter(m => m.status === 'active');
-    const queuedModels = models.filter(m => m.status === 'queued');
-    const exhaustedModels = models.filter(m => m.status === 'exhausted');
+    // ─── Rendered columns ──────────────────────────────────────────────────────
+    const active = groups.filter(g => g.status === "active");
+    const queued = groups.filter(g => g.status === "queued");
+    const exhausted = groups.filter(g => g.status === "exhausted");
+
+    const statusColors: Record<string, string> = {
+        active: "bg-emerald-50 border-emerald-200 text-emerald-700",
+        queued: "bg-blue-50 border-blue-200 text-blue-700",
+        exhausted: "bg-gray-50 border-gray-200 text-gray-500",
+    };
+
+    // ─── Group card ────────────────────────────────────────────────────────────
+    const GroupCard = ({ group }: { group: ModelGroup }) => {
+        const expanded = expandedGroup === group.id;
+        const usedPct = parseFloat(pct(group.spend_today, group.spend_limit));
+        const barColor = usedPct >= 90 ? "bg-red-500" : usedPct >= 60 ? "bg-amber-400" : "bg-emerald-500";
+
+        return (
+            <div className={`border rounded-xl p-4 mb-3 transition-all ${statusColors[group.status]}`}>
+                <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm truncate">{group.name}</div>
+                        <div className="text-xs opacity-70 mt-0.5">
+                            {group.models_config?.length || 0} model{group.models_config?.length !== 1 ? "s" : ""} ·{" "}
+                            <span className="font-mono">${group.spend_today?.toFixed(2) || "0.00"} / ${group.spend_limit}</span>
+                        </div>
+                        <div className="mt-2 h-1.5 bg-black/10 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${barColor}`} style={{ width: `${usedPct}%` }} />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 ml-3 shrink-0">
+                        {group.gost_container_id && (
+                            <span className="text-xs px-1.5 py-0.5 bg-black/10 rounded font-mono">Gost</span>
+                        )}
+                        <button onClick={() => setExpandedGroup(expanded ? null : group.id)} className="p-1 rounded hover:bg-black/10">
+                            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+                        <button onClick={() => deleteGroup(group.id)} className="p-1 rounded hover:bg-red-100 text-red-600">
+                            <Trash2 className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {expanded && (
+                    <div className="mt-3 pt-3 border-t border-black/10 space-y-1">
+                        {group.models_config?.map((m, i) => (
+                            <div key={i} className="text-xs bg-white/70 rounded-lg px-3 py-2">
+                                <div className="font-medium">{m.public_name}</div>
+                                <div className="opacity-60 truncate">{m.api_base || "default"}</div>
+                                <div className="opacity-60">${m.pricing_input?.toFixed(6)}/1k in · ${m.pricing_output?.toFixed(6)}/1k out</div>
+                            </div>
+                        ))}
+                        {group.proxy_url && <div className="text-xs opacity-60 pt-1 truncate">🔗 {group.proxy_url}</div>}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // ─── Column wrapper ────────────────────────────────────────────────────────
+    const Column = ({ title, items, badge, badgeColor }: { title: string; items: ModelGroup[]; badge?: string; badgeColor?: string }) => (
+        <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-4">
+                <h2 className="font-semibold text-gray-800 text-sm uppercase tracking-wide">{title}</h2>
+                {badge && <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>{badge}</span>}
+            </div>
+            {items.length === 0 ? (
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-400">Empty</div>
+            ) : (
+                items.map(g => <GroupCard key={g.id} group={g} />)
+            )}
+        </div>
+    );
 
     return (
-        <div className="p-8 max-w-[1600px] mx-auto space-y-8">
-            {/* HEADER */}
-            <div className="flex justify-between items-center">
+        <div className="p-6 max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h1 className="text-4xl font-bold tracking-tight mb-2">Airport Dispatcher</h1>
-                    <p className="text-gray-500">Manage LiteLLM Proxy Gateways</p>
+                    <h1 className="text-2xl font-bold text-gray-900">✈️ Airport Dispatcher</h1>
+                    <p className="text-sm text-gray-500 mt-1">Manage model key groups, proxy routing, and spend limits.</p>
                 </div>
-
-                <div className="flex items-center gap-6">
-                    <div className="flex items-center space-x-2 border p-4 rounded-lg bg-white shadow-sm">
-                        <input type="checkbox" id="auto-mode" className="w-5 h-5 rounded" defaultChecked />
-                        <label htmlFor="auto-mode" className="font-semibold text-lg cursor-pointer">Auto Dispatcher</label>
-                    </div>
-
-                    <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex items-center gap-2 px-6 py-3 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
-                    >
-                        <Plus className="h-5 w-5" />
-                        Add New Model
-                    </button>
-                </div>
+                <button
+                    onClick={() => { setIsModalOpen(true); resetForm(); }}
+                    className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+                >
+                    <Plus className="h-4 w-4" />
+                    Add Key Group
+                </button>
             </div>
 
-            {/* CUSTOM MODAL */}
+            {/* Board */}
+            {isLoading ? (
+                <div className="flex items-center justify-center h-48 text-gray-400"><Loader2 className="animate-spin h-6 w-6" /></div>
+            ) : (
+                <div className="flex gap-6">
+                    <Column title="Active" items={active} badge={`${active.length}/4`} badgeColor="bg-emerald-100 text-emerald-700" />
+                    <Column title="Queued" items={queued} badge={queued.length > 0 ? String(queued.length) : undefined} badgeColor="bg-blue-100 text-blue-700" />
+                    <Column title="Exhausted" items={exhausted} />
+                </div>
+            )}
+
+            {/* Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-[500px] shadow-xl">
-                        <h2 className="text-xl font-bold mb-4">Add AI Node to Dispatch Queue</h2>
-
-                        <div className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">LiteLLM Node Group Name</label>
-                                <input
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="gemini-balance-nodes"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                />
-                                <p className="text-xs text-gray-500">Models sharing this name will be load-balanced together.</p>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">Provider API Key</label>
-                                <input
-                                    type="password"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="sk-..."
-                                    value={formData.api_key}
-                                    onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">SOCKS5 Proxy URL (Optional)</label>
-                                <input
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    placeholder="socks5h://user:pass@ip:port"
-                                    value={formData.proxy_url}
-                                    onChange={(e) => setFormData({ ...formData, proxy_url: e.target.value })}
-                                />
-                                <p className="text-xs text-gray-500">System will spawn a local Gost Docker container for this proxy.</p>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium">Daily Request Limit</label>
-                                <input
-                                    type="number"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    value={formData.daily_request_limit}
-                                    onChange={(e) => setFormData({ ...formData, daily_request_limit: Number(e.target.value) })}
-                                />
-                            </div>
-
-                            {testResult && (
-                                <div className={`p-3 rounded-md text-sm border flex items-center ${testResult.success ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-                                    {testResult.success ? <Check className="h-4 w-4 mr-2" /> : <X className="h-4 w-4 mr-2" />}
-                                    {testResult.message}
-                                </div>
-                            )}
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto py-10 px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
+                            <h2 className="text-lg font-semibold">Add Key Group</h2>
+                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
                         </div>
 
-                        <div className="flex justify-between mt-6">
-                            <button
-                                className="flex items-center px-4 py-2 border rounded-md hover:bg-gray-50"
-                                onClick={handleTest}
-                                disabled={isTesting || !formData.api_key}
-                            >
-                                {isTesting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                                Test Connection
+                        <div className="px-6 py-5 space-y-5">
+                            {/* ── Group Info ── */}
+                            <section>
+                                <h3 className="text-xs font-semibold uppercase text-gray-400 mb-3">Group Settings</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Group Name *</label>
+                                        <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                                            placeholder="DeepSeek Proxy Node 1" value={groupName} onChange={e => setGroupName(e.target.value)} />
+                                    </div>
+
+                                    <div className="col-span-2">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Provider API Key *</label>
+                                        <input type="password" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                                            placeholder="sk-..." value={apiKey} onChange={e => setApiKey(e.target.value)} />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">SOCKS5 Proxy URL (optional)</label>
+                                        <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                                            placeholder="socks5h://user:pass@ip:port" value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} />
+                                        <p className="text-xs text-gray-400 mt-1">A Gost HTTP proxy container will be auto-spawned.</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-600 mb-1">Spend Limit (USD)</label>
+                                        <input type="number" min={1} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+                                            value={spendLimit} onChange={e => setSpendLimit(Number(e.target.value))} />
+                                        <p className="text-xs text-gray-400 mt-1">Group rotates out when this limit is reached.</p>
+                                    </div>
+                                </div>
+
+                                {/* Test Connection */}
+                                <div className="mt-3 flex items-center gap-3">
+                                    <button onClick={testConnection} disabled={isTesting || !apiKey}
+                                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
+                                        {isTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlugZap className="h-3.5 w-3.5" />}
+                                        Test Connection
+                                    </button>
+                                    {testResult && (
+                                        <span className={`text-xs font-medium ${testResult.ok ? "text-emerald-600" : "text-red-500"}`}>
+                                            {testResult.ok ? "✓" : "✕"} {testResult.msg}
+                                        </span>
+                                    )}
+                                </div>
+                            </section>
+
+                            {/* ── Model List ── */}
+                            <section>
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-xs font-semibold uppercase text-gray-400">Models in this group ({modelList.length}/3)</h3>
+                                    {modelList.length < 3 && (
+                                        <button onClick={addModel} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                                            <Plus className="h-3.5 w-3.5" /> Add Model
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-4">
+                                    {modelList.map((model, idx) => (
+                                        <div key={idx} className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                                            {/* Template picker */}
+                                            {templates.length > 0 && (
+                                                <div className="mb-3">
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Load from Template</label>
+                                                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        defaultValue=""
+                                                        onChange={e => {
+                                                            const tpl = templates.find(t => String(t.id) === e.target.value);
+                                                            if (tpl) applyTemplate(idx, tpl);
+                                                        }}>
+                                                        <option value="" disabled>— Select template —</option>
+                                                        {templates.map(t => <option key={t.id} value={t.id}>{t.template_name}</option>)}
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            {/* Model fields */}
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs text-gray-500 mb-1">Public Model Name *</label>
+                                                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        placeholder="gemini-2.5-pro" value={model.public_name}
+                                                        onChange={e => updateModel(idx, "public_name", e.target.value)} />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs text-gray-500 mb-1">LiteLLM Internal Name *</label>
+                                                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        placeholder="openai/gemini-2.5-pro" value={model.litellm_name}
+                                                        onChange={e => updateModel(idx, "litellm_name", e.target.value)} />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs text-gray-500 mb-1">API Base URL</label>
+                                                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        placeholder="https://generativelanguage.googleapis.com/v1beta/openai/"
+                                                        value={model.api_base}
+                                                        onChange={e => updateModel(idx, "api_base", e.target.value)} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Input price / 1M tokens ($)</label>
+                                                    <input type="number" step="0.000001" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        value={model.pricing_input}
+                                                        onChange={e => updateModel(idx, "pricing_input", parseFloat(e.target.value) || 0)} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Output price / 1M tokens ($)</label>
+                                                    <input type="number" step="0.000001" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        value={model.pricing_output}
+                                                        onChange={e => updateModel(idx, "pricing_output", parseFloat(e.target.value) || 0)} />
+                                                </div>
+                                            </div>
+
+                                            {/* Save as template + Remove */}
+                                            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+                                                <input className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-black/20"
+                                                    placeholder="Template name…"
+                                                    value={saveTemplateName}
+                                                    onChange={e => setSaveTemplateName(e.target.value)} />
+                                                <button onClick={() => saveAsTemplate(model, saveTemplateName)}
+                                                    className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium">
+                                                    <Save className="h-3.5 w-3.5" /> Save
+                                                </button>
+                                                {modelList.length > 1 && (
+                                                    <button onClick={() => removeModel(idx)}
+                                                        className="text-xs px-2.5 py-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="px-6 pb-6 pt-4 border-t border-gray-100 flex justify-end gap-3">
+                            <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                Cancel
                             </button>
-                            <div className="flex gap-2">
-                                <button
-                                    className="px-4 py-2 border rounded-md hover:bg-gray-50"
-                                    onClick={() => setIsModalOpen(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
-                                    onClick={handleCreate}
-                                    disabled={isSubmitting}
-                                >
-                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Add to Queue
-                                </button>
-                            </div>
+                            <button onClick={submitGroup} disabled={isSubmitting}
+                                className="flex items-center gap-2 px-5 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
+                                {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Add to Queue
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
-
-            {/* DASHBOARD COLUMNS */}
-            <div className="grid lg:grid-cols-3 gap-6 items-start">
-
-                {/* ACTIVE COLUMN */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b pb-2">
-                        <h2 className="text-xl font-semibold flex items-center gap-2 text-green-600">
-                            <Activity className="h-5 w-5" /> Active Now
-                        </h2>
-                        <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                            {activeModels.length} / 4
-                        </span>
-                    </div>
-
-                    <div className="space-y-4 min-h-[300px]">
-                        {activeModels.map(model => (
-                            <div key={model.id} className="rounded-lg border border-green-200 bg-green-50/10 shadow-sm relative overflow-hidden group">
-                                <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
-                                <div className="p-4 border-b border-green-100 flex justify-between items-center">
-                                    <h3 className="font-semibold text-lg">{model.name}</h3>
-                                    <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold">#{model.id}</span>
-                                </div>
-                                <div className="p-4 space-y-2 text-sm text-gray-600">
-                                    <div className="flex justify-between">
-                                        <span>Requests Today:</span>
-                                        <span className="font-medium text-black">{model.requests_today} / {model.daily_request_limit}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Gateway:</span>
-                                        <span className="font-mono text-xs max-w-[150px] truncate" title={model.gost_container_id || 'Native'}>
-                                            {model.gost_container_id || 'Native Route'}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 px-4 py-3 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={() => handleDelete(model.id)}
-                                        className="text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-md text-sm font-medium"
-                                    >Kill</button>
-                                </div>
-                            </div>
-                        ))}
-                        {activeModels.length === 0 && !loading && (
-                            <div className="text-center p-8 border border-dashed rounded-lg text-gray-400">
-                                No active models. The dispatcher will pick from the queue.
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* QUEUED COLUMN */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b pb-2">
-                        <h2 className="text-xl font-semibold flex items-center gap-2 text-blue-600">
-                            <Server className="h-5 w-5" /> Queued (Waitlist)
-                        </h2>
-                        <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                            {queuedModels.length} models
-                        </span>
-                    </div>
-
-                    <div className="space-y-4 min-h-[300px]">
-                        {queuedModels.map(model => (
-                            <div key={model.id} className="rounded-lg border border-blue-200 bg-white shadow-sm relative overflow-hidden group">
-                                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
-                                <div className="p-4 border-b border-blue-100">
-                                    <h3 className="font-semibold text-lg">{model.name}</h3>
-                                </div>
-                                <div className="p-4 space-y-2 text-sm text-gray-600">
-                                    <div className="flex justify-between">
-                                        <span>Daily Limit:</span>
-                                        <span className="font-medium text-black">{model.daily_request_limit}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Gateway status:</span>
-                                        {model.gost_container_id ? (
-                                            <span className="text-green-600 flex items-center gap-1"><Check className="h-3 w-3" /> Spawned</span>
-                                        ) : (
-                                            <span>Native Node</span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="bg-gray-50 px-4 py-3 flex justify-end gap-2">
-                                    <button
-                                        onClick={() => handleDelete(model.id)}
-                                        className="text-red-600 hover:bg-red-50 px-3 py-1 border border-red-200 rounded-md text-sm font-medium"
-                                    >Discard</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* EXHAUSTED COLUMN */}
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b pb-2">
-                        <h2 className="text-xl font-semibold flex items-center gap-2 text-red-600">
-                            <ZapOff className="h-5 w-5" /> Exhausted
-                        </h2>
-                        <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                            {exhaustedModels.length}
-                        </span>
-                    </div>
-
-                    <div className="space-y-4 min-h-[300px]">
-                        {exhaustedModels.map(model => (
-                            <div key={model.id} className="rounded-lg border border-red-200 bg-red-50/50 shadow-sm relative overflow-hidden opacity-75 grayscale hover:grayscale-0 transition-all">
-                                <div className="absolute top-0 left-0 w-1 h-full bg-red-500" />
-                                <div className="p-4 border-b border-red-100">
-                                    <h3 className="font-semibold text-lg line-through text-gray-500">{model.name}</h3>
-                                </div>
-                                <div className="p-4 text-sm">
-                                    <p className="text-red-800 font-medium">Daily limit reached ({model.daily_request_limit})</p>
-                                </div>
-                                <div className="bg-white px-4 py-3 flex justify-between">
-                                    <span className="text-xs text-gray-400 my-auto">Sleeping</span>
-                                    <button
-                                        onClick={() => handleDelete(model.id)}
-                                        className="text-red-600 hover:text-red-800 px-3 py-1 text-sm font-medium"
-                                    >Clear</button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-            </div>
         </div>
     );
 }

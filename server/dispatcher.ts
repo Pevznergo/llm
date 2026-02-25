@@ -39,18 +39,40 @@ async function runDispatcherCycle() {
         let modelsRemoved = 0;
 
         for (const model of activeModels) {
-            // Simulated check: if requests_today >= daily_request_limit
-            if (model.requests_today >= model.daily_request_limit) {
-                console.log(`[Dispatcher] Model ${model.id} exhausted limits. Archiving.`);
+            // Aggregate spend for all sub-models in this group
+            let currentSpend = 0;
+            const modelIds = model.litellm_model_ids || [];
 
-                // Remove from LiteLLM router
-                if (model.litellm_model_id) {
-                    await axios.post(`${LITELLM_URL}/model/delete`, { id: model.litellm_model_id }, {
+            for (const litellmId of modelIds) {
+                try {
+                    // Fetch real-time spend from LiteLLM's info route
+                    const res = await axios.get(`${LITELLM_URL}/model/info?id=${litellmId}`, {
                         headers: { 'Authorization': `Bearer ${MASTER_KEY}` }
-                    }).catch(e => console.warn(`[Dispatcher] LiteLLM delete failed for ${model.id}`));
+                    });
+
+                    if (res.data?.data?.spend) {
+                        currentSpend += parseFloat(res.data.data.spend);
+                    }
+                } catch (e: any) {
+                    console.warn(`[Dispatcher] Could not fetch spend for LiteLLM ID ${litellmId}: ${e.message}`);
+                }
+            }
+
+            // Update today's spend in the DB
+            await sql`UPDATE managed_models SET spend_today = ${currentSpend} WHERE id = ${model.id}`;
+
+            // Check if group has exhausted the global spend limit
+            if (currentSpend >= model.spend_limit) {
+                console.log(`[Dispatcher] Model Group ${model.id} exhausted limits ($${currentSpend} >= $${model.spend_limit}). Archiving.`);
+
+                // Remove all associated models from LiteLLM router
+                for (const litellmId of modelIds) {
+                    await axios.post(`${LITELLM_URL}/model/delete`, { id: litellmId }, {
+                        headers: { 'Authorization': `Bearer ${MASTER_KEY}` }
+                    }).catch(e => console.warn(`[Dispatcher] LiteLLM delete failed for ${litellmId}`));
                 }
 
-                // Kill Gost Container to free RAM
+                // Kill Gost Container to free RAM and close proxy connection
                 if (model.gost_container_id) {
                     await stopGostContainer(model.gost_container_id).catch(() => { });
                 }
@@ -61,43 +83,55 @@ async function runDispatcherCycle() {
             }
         }
 
-        // 3. Replenish Active Models if bellow max capacity (4)
+        // 3. Replenish Active Models if below max capacity (4 groups)
         const currentActiveCount = activeModels.length - modelsRemoved;
         const slotsAvailable = Math.max(0, 4 - currentActiveCount);
 
         for (let i = 0; i < slotsAvailable && i < queuedModels.length; i++) {
-            const nextModel = queuedModels[i];
-            console.log(`[Dispatcher] Promoting queued model ${nextModel.id} to active.`);
+            const nextGroup = queuedModels[i];
+            console.log(`[Dispatcher] Promoting queued group ${nextGroup.id} to active.`);
 
-            // Register in LiteLLM
             // Our proxy translation is either native (null gost_id) or points to the Gost container
-            const apiBase = nextModel.gost_container_id
-                ? `http://${nextModel.gost_container_id}:${8080 + nextModel.id}/v1`
+            const apiBase = nextGroup.gost_container_id
+                ? `http://${nextGroup.gost_container_id}:${8080 + nextGroup.id}/v1`
                 : undefined;
 
-            try {
-                const addRes = await axios.post(`${LITELLM_URL}/model/new`, {
-                    model_name: nextModel.name,
-                    litellm_params: {
-                        model: 'openai/gemini-2.5-pro', // Or dynamically mapped
-                        api_key: nextModel.api_key,
-                        api_base: apiBase,
-                    },
-                    model_info: { id: `managed_${nextModel.id}`, base_model: nextModel.name }
-                }, {
-                    headers: { 'Authorization': `Bearer ${MASTER_KEY}` }
-                });
+            const modelsConfig = nextGroup.models_config || [];
+            const registeredLitellmIds: string[] = [];
 
-                const litellmId = addRes.data.data.model_info.id;
+            // Register each model inside the group to LiteLLM
+            for (const modelDef of modelsConfig) {
+                try {
+                    // Create a unique internal ID for LiteLLM router combining group ID and model name
+                    const internalId = `managed_group_${nextGroup.id}_${modelDef.litellm_name.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
-                await sql`
-                    UPDATE managed_models 
-                    SET status = 'active', litellm_model_id = ${litellmId} 
-                    WHERE id = ${nextModel.id}
-                `;
-            } catch (e: any) {
-                console.error(`[Dispatcher] Failed to add model ${nextModel.id} to LiteLLM router: ${e.message}`);
+                    const addRes = await axios.post(`${LITELLM_URL}/model/new`, {
+                        model_name: modelDef.public_name, // e.g., gemini-2.5-pro
+                        litellm_params: {
+                            model: modelDef.litellm_name, // e.g., openai/gemini-pro
+                            api_key: nextGroup.api_key,
+                            api_base: modelDef.api_base || apiBase, // use specific base if available, else group's proxy
+                            input_cost_per_token: modelDef.pricing_input,
+                            output_cost_per_token: modelDef.pricing_output,
+                            custom_llm_provider: "openai" // or map dynamically if needed
+                        },
+                        model_info: { id: internalId, base_model: modelDef.public_name }
+                    }, {
+                        headers: { 'Authorization': `Bearer ${MASTER_KEY}` }
+                    });
+
+                    registeredLitellmIds.push(addRes.data.data.model_info.id);
+                } catch (e: any) {
+                    console.error(`[Dispatcher] Failed to add sub-model ${modelDef.public_name} to LiteLLM router: ${e.message}`);
+                }
             }
+
+            // Update group status to active and save the IDs
+            await sql`
+                UPDATE managed_models 
+                SET status = 'active', litellm_model_ids = ${JSON.stringify(registeredLitellmIds)}::jsonb
+                WHERE id = ${nextGroup.id}
+            `;
         }
 
         // 4. Alerting Checks

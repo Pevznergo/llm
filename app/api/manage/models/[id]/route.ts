@@ -22,22 +22,27 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
             }
         }
 
-        // 2. Delete from LiteLLM if it was active and had an ID registered
-        if (model.litellm_model_id) {
+        // 2. Delete from LiteLLM if it was active and had IDs registered
+        if (model.litellm_model_ids && Array.isArray(model.litellm_model_ids) && model.litellm_model_ids.length > 0) {
             try {
                 const masterKey = process.env.LITELLM_MASTER_KEY;
-                await axios.post('http://127.0.0.1:4000/model/delete', {
-                    id: model.litellm_model_id
-                }, {
-                    headers: { 'Authorization': `Bearer ${masterKey}` }
-                });
 
-                // Flush router cache so changes reflect instantly
+                // Delete all associated models in this group from the LiteLLM Router
+                for (const litellmId of model.litellm_model_ids) {
+                    await axios.post('http://127.0.0.1:4000/model/delete', {
+                        id: litellmId
+                    }, {
+                        headers: { 'Authorization': `Bearer ${masterKey}` }
+                    }).catch(e => console.warn(`[API] Could not delete model ${litellmId}: ${e.message}`));
+                }
+
+                // Flush router cache once at the end so changes reflect instantly
                 await axios.post('http://127.0.0.1:4000/cache/redis/flushall', {}, {
                     headers: { 'Authorization': `Bearer ${masterKey}` }
-                });
+                }).catch(e => console.warn(`[API] Could not flush cache: ${e.message}`));
+
             } catch (e: any) {
-                console.warn(`[API] Could not delete model from LiteLLM:`, e.message);
+                console.warn(`[API] Error during LiteLLM model group deletion:`, e.message);
             }
         }
 
