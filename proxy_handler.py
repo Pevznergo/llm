@@ -83,45 +83,11 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
         try:
-            params = data.get("litellm_params", {})
-            
-            # LiteLLM sometimes puts proxy_url in the main kwargs or params based on router 
-            proxy = params.get("proxy_url") or data.get("proxy_url") or data.get("kwargs", {}).get("proxy_url")
-            
-            # If a SOCKS5 proxy was configured in the UI, we intercept it here to prevent
-            # LiteLLM from overwriting the default API_BASE (which breaks native headers/auth).
-            # We then inject it as an explicit Transport Client layer via httpx.
-            if proxy and (proxy.startswith("socks5") or proxy.startswith("socks5h")):
-                
-                # 1. Pop proxy_url COMPLETELY so the LLM providers (Google, OpenAI) behave normally
-                # Setting to None still leaves the key in the payload which trips up OpenAI SDK
-                if "proxy_url" in data.get("litellm_params", {}):
-                    data["litellm_params"].pop("proxy_url", None)
-                if "proxy_url" in data:
-                    data.pop("proxy_url", None)
-                if "proxy_url" in data.get("kwargs", {}):
-                    data["kwargs"].pop("proxy_url", None)
-                
-                # 2. Attach the SOCKS proxy client Transport natively using a connection pool
-                if proxy not in self.client_cache:
-                    self.client_cache[proxy] = httpx.AsyncClient(proxy=proxy)
-                
-                # Assign explicitly to http_client for OpenAI v1+ backward compatibility
-                if "kwargs" not in data:
-                    data["kwargs"] = {}
-                data["kwargs"]["http_client"] = self.client_cache[proxy]
-                data["client"] = self.client_cache[proxy]
-                
-                # INJECT METADATA for LiteLLM UI Logs
-                # This ensures you can see which proxy was used directly in the dashboard
-                if "metadata" not in data:
-                    data["metadata"] = {}
-                data["metadata"]["socks"] = "yes"
-                
-                key_preview = str(data.get("api_key", params.get("api_key", "MISSING_KEY")))[0:15]
-                print(f"[ProxyIntercept] Successfully bound SOCKS proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
+            # We no longer intercept proxy_url here.
+            # We rely on Gost/Privoxy local containers and LiteLLM's native api_base routing.
+            pass
         except Exception as e:
-            print(f"[ProxyIntercept] Failed to inject network proxy: {str(e)}")
+            print(f"[ProxyIntercept] Failed in pre_call_hook: {str(e)}")
             
         return data
 

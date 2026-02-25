@@ -507,6 +507,22 @@ export async function initDatabase() {
       )
     `;
 
+    // Managed Models Table (Dispatcher)
+    await sql`
+      CREATE TABLE IF NOT EXISTS managed_models (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        api_key VARCHAR(255) NOT NULL,
+        proxy_url VARCHAR(255),
+        gost_container_id VARCHAR(255),
+        litellm_model_id VARCHAR(255),
+        daily_request_limit INTEGER NOT NULL,
+        requests_today INTEGER DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'queued',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
     // --- Strict Table Deletion/Truncation Protection ---
     try {
       console.log('Setting up strict database protection rules...');
