@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, TestTube2, Save, ChevronDown, ChevronUp, Loader2, PlugZap } from "lucide-react";
+import { Plus, Trash2, TestTube2, Save, ChevronDown, ChevronUp, Loader2, PlugZap, Zap } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -80,6 +80,7 @@ export default function ManagePage() {
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isActivating, setIsActivating] = useState<number | null>(null);
     const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
 
     const load = useCallback(async () => {
@@ -158,6 +159,21 @@ export default function ManagePage() {
         setIsSubmitting(false);
     };
 
+    // ── Activate queued group ─────────────────────────────────────────────────
+    const activateGroup = async (id: number) => {
+        setIsActivating(id);
+        const res = await fetch(`/api/manage/models/${id}/activate`, { method: "POST" });
+        const data = await res.json();
+        setIsActivating(null);
+        if (res.ok) {
+            const info = data.errors?.length ? `\nWarnings: ${data.errors.join(", ")}` : "";
+            alert(`✅ Activated! ${data.registered} model(s) registered in LiteLLM.${info}`);
+            load();
+        } else {
+            alert(`❌ Failed: ${data.error}\n${data.details?.join("\n") || ""}`);
+        }
+    };
+
     // ── Delete group ────────────────────────────────────────────────────────────
     const deleteGroup = async (id: number) => {
         if (!confirm("Remove this model group? All associated LiteLLM routes will be deleted.")) return;
@@ -207,6 +223,18 @@ export default function ManagePage() {
                     <div className="flex items-center gap-1 ml-3 shrink-0">
                         {group.gost_container_id && (
                             <span className="text-xs px-1.5 py-0.5 bg-black/10 rounded font-mono">Gost</span>
+                        )}
+                        {group.status === "queued" && !onCooldown && (
+                            <button
+                                onClick={() => activateGroup(group.id)}
+                                disabled={isActivating === group.id}
+                                title="Activate — register models in LiteLLM now"
+                                className="p-1 rounded hover:bg-emerald-100 text-emerald-700 disabled:opacity-40"
+                            >
+                                {isActivating === group.id
+                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                    : <Zap className="h-4 w-4" />}
+                            </button>
                         )}
                         <button onClick={() => setExpandedGroup(expanded ? null : group.id)} className="p-1 rounded hover:bg-black/10">
                             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
