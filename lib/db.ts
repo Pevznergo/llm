@@ -95,12 +95,6 @@ export async function initDatabase() {
       )
     `
 
-    // Migration: Add reset token fields to User table if not exists
-    try {
-      await sql`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255)`;
-      await sql`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`;
-    } catch (e) { }
-
     // Reviews table
     await sql`
       CREATE TABLE IF NOT EXISTS reviews (
