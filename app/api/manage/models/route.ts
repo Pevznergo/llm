@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { spawnGostContainer, stopGostContainer } from '../gost_manager';
+import { spawnGostContainer } from '../gost_manager';
+
+/** 
+ * Run schema migrations inline so they apply even without a server restart.
+ * All statements are safe to run multiple times.
+ */
+async function ensureMigrations() {
+    // These are idempotent — safe to call on every POST
+    await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_limit DECIMAL(10, 4) DEFAULT 300`;
+    await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_today DECIMAL(10, 4) DEFAULT 0`;
+    await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS models_config JSONB DEFAULT '[]'::jsonb`;
+    await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS litellm_model_ids JSONB DEFAULT '[]'::jsonb`;
+    await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMP`;
+    // Make legacy NOT NULL columns optional (keys are now per-model inside models_config)
+    try { await sql`ALTER TABLE managed_models ALTER COLUMN api_key DROP NOT NULL`; } catch { }
+    try { await sql`ALTER TABLE managed_models ALTER COLUMN daily_request_limit DROP NOT NULL`; } catch { }
+}
 
 export async function GET() {
     try {
@@ -23,6 +39,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
+        await ensureMigrations();
+
         const body = await req.json();
         const { name, proxy_url, spend_limit, models_config } = body;
 
@@ -39,7 +57,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Each model must have api_key, litellm_name and public_name" }, { status: 400 });
         }
 
-        // 1. Insert the Group record in DB (no group-level api_key — it's per-model)
+        // Insert the Group record (no group-level api_key — it's per-model inside models_config)
         const result = await sql`
             INSERT INTO managed_models (name, proxy_url, spend_limit, spend_today, models_config, status)
             VALUES (${name}, ${proxy_url || null}, ${spend_limit}, 0, ${JSON.stringify(models_config)}, 'queued')
