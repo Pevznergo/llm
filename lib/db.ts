@@ -274,16 +274,10 @@ export async function initDatabase() {
       )
     `;
 
-    // Migration: Add account column if not exists
-    try {
-      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS account VARCHAR(255)`;
-    } catch (e) { }
-
     // Managed Models table (New)
     await sql`
       CREATE TABLE IF NOT EXISTS managed_models (
         id SERIAL PRIMARY KEY,
-        account VARCHAR(255),
         model_name VARCHAR(255) NOT NULL,
         litellm_params JSONB NOT NULL,
         model_info JSONB,
