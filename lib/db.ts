@@ -533,6 +533,10 @@ export async function initDatabase() {
       await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS spend_today DECIMAL(10, 4) DEFAULT 0`;
       await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS models_config JSONB DEFAULT '[]'::jsonb`;
       await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS litellm_model_ids JSONB DEFAULT '[]'::jsonb`;
+      await sql`ALTER TABLE managed_models ADD COLUMN IF NOT EXISTS cooldown_until TIMESTAMP`;
+      // api_key is now per-model (stored in models_config JSONB), so make the column optional
+      await sql`ALTER TABLE managed_models ALTER COLUMN api_key DROP NOT NULL`;
+      await sql`ALTER TABLE managed_models ALTER COLUMN daily_request_limit DROP NOT NULL`;
     } catch (e) {
       console.warn("managed_models migration warning:", e);
     }

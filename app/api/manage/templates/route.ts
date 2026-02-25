@@ -1,8 +1,24 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 
+async function ensureTable() {
+    await sql`
+        CREATE TABLE IF NOT EXISTS model_dispatcher_templates (
+            id SERIAL PRIMARY KEY,
+            template_name VARCHAR(255) UNIQUE NOT NULL,
+            litellm_name VARCHAR(255) NOT NULL,
+            public_name VARCHAR(255) NOT NULL,
+            api_base VARCHAR(1024),
+            pricing_input DECIMAL(10, 6) DEFAULT 0,
+            pricing_output DECIMAL(10, 6) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `;
+}
+
 export async function GET() {
     try {
+        await ensureTable();
         const templates = await sql`
             SELECT * FROM model_dispatcher_templates 
             ORDER BY created_at DESC
@@ -15,6 +31,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
+        await ensureTable();
         const body = await req.json();
         const { template_name, litellm_name, public_name, api_base, pricing_input, pricing_output } = body;
 

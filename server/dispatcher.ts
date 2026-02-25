@@ -63,7 +63,7 @@ async function runDispatcherCycle() {
 
             // Check if group has exhausted the global spend limit
             if (currentSpend >= model.spend_limit) {
-                console.log(`[Dispatcher] Model Group ${model.id} exhausted limits ($${currentSpend} >= $${model.spend_limit}). Archiving.`);
+                console.log(`[Dispatcher] Model Group ${model.id} exhausted limits ($${currentSpend} >= $${model.spend_limit}). Sending to cooldown queue.`);
 
                 // Remove all associated models from LiteLLM router
                 for (const litellmId of modelIds) {
@@ -77,8 +77,21 @@ async function runDispatcherCycle() {
                     await stopGostContainer(model.gost_container_id).catch(() => { });
                 }
 
-                // Update DB Status
-                await sql`UPDATE managed_models SET status = 'exhausted' WHERE id = ${model.id}`;
+                // Compute cooldown_until: next 01:00 PST = 09:00 UTC
+                // If it's already past 09:00 UTC today, target 09:00 UTC tomorrow
+                const nowUtc = new Date();
+                const cooldown = new Date(Date.UTC(nowUtc.getUTCFullYear(), nowUtc.getUTCMonth(), nowUtc.getUTCDate(), 9, 0, 0, 0));
+                if (nowUtc.getUTCHours() >= 9) {
+                    cooldown.setUTCDate(cooldown.getUTCDate() + 1);
+                }
+
+                // Put back in queue (not exhausted!) with a cooldown, reset spend, clear LiteLLM IDs
+                await sql`
+                    UPDATE managed_models 
+                    SET status = 'queued', spend_today = 0, litellm_model_ids = '[]'::jsonb,
+                        gost_container_id = NULL, cooldown_until = ${cooldown.toISOString()}
+                    WHERE id = ${model.id}
+                `;
                 modelsRemoved++;
             }
         }
@@ -87,8 +100,12 @@ async function runDispatcherCycle() {
         const currentActiveCount = activeModels.length - modelsRemoved;
         const slotsAvailable = Math.max(0, 4 - currentActiveCount);
 
-        for (let i = 0; i < slotsAvailable && i < queuedModels.length; i++) {
-            const nextGroup = queuedModels[i];
+        // Eligible queued groups: exclude those still in cooldown
+        const now = new Date();
+        const eligibleQueued = queuedModels.filter(m => !m.cooldown_until || new Date(m.cooldown_until) <= now);
+
+        for (let i = 0; i < slotsAvailable && i < eligibleQueued.length; i++) {
+            const nextGroup = eligibleQueued[i];
             console.log(`[Dispatcher] Promoting queued group ${nextGroup.id} to active.`);
 
             // Our proxy translation is either native (null gost_id) or points to the Gost container
@@ -134,9 +151,9 @@ async function runDispatcherCycle() {
             `;
         }
 
-        // 4. Alerting Checks
-        const remainingQueue = queuedModels.length - slotsAvailable;
-        const totalAlive = currentActiveCount + Math.max(0, remainingQueue);
+        // 4. Alerting Checks — count eligible queued (not on cooldown)
+        const remainingEligible = eligibleQueued.length - Math.min(slotsAvailable, eligibleQueued.length);
+        const totalAlive = currentActiveCount + Math.max(0, remainingEligible);
 
         if (totalAlive <= 3) {
             console.warn(`[Dispatcher] WARNING: Only ${totalAlive} active/queued models left!`);

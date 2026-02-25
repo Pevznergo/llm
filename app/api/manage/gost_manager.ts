@@ -9,17 +9,30 @@ const execAsync = promisify(exec);
 // we'd query the DB for max port in use, but this works for 4-10 models.
 let currentPort = 8080;
 
+/**
+ * Normalize proxy URL format.
+ * Accepts both standard `socks5h://user:pass@ip:port`
+ * and shorthand `socks5h://ip:port:user:pass` (ip:port:login:password).
+ */
+function normalizeProxyUrl(rawUrl: string): string {
+    // Match shorthand: scheme://ip:port:user:pass
+    const shorthand = rawUrl.match(/^(socks5h?|http|https):\/\/([^:]+):(\d+):([^:]+):(.+)$/);
+    if (shorthand) {
+        const [, scheme, host, port, user, pass] = shorthand;
+        return `${scheme}://${user}:${pass}@${host}:${port}`;
+    }
+    // Already in standard form
+    return rawUrl;
+}
+
 export async function spawnGostContainer(modelId: number, proxyUrl: string): Promise<{ containerName: string, internalApiBase: string }> {
     const port = ++currentPort;
-    // Create a predictable container name based on our DB's managed_models.id
     const containerName = `gost_proxy_model_${modelId}`;
+    const normalizedProxy = normalizeProxyUrl(proxyUrl);
 
-    console.log(`[GostManager] Spawning container ${containerName} mapped to ${proxyUrl} on port ${port}...`);
+    console.log(`[GostManager] Spawning container ${containerName} mapped to ${normalizedProxy} on port ${port}...`);
 
-    // Command to launch gogost/gost inside the same docker network LLM uses
-    // We bind to a dynamic internal port, and forward it to the provided SOCKS5 proxy
-    // We do NOT expose to 0.0.0.0 for security.
-    const runCmd = `docker run -d --name ${containerName} --restart always gogost/gost -L=http://:${port} -F=${proxyUrl}`;
+    const runCmd = `docker run -d --name ${containerName} --restart always gogost/gost -L=http://:${port} -F=${normalizedProxy}`;
 
     try {
         const { stdout, stderr } = await execAsync(runCmd);

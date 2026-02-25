@@ -23,6 +23,7 @@ interface ModelGroup {
     models_config: ModelConfig[];
     litellm_model_ids: string[];
     status: "active" | "queued" | "exhausted";
+    cooldown_until: string | null; // ISO timestamp
     created_at: string;
 }
 
@@ -47,8 +48,19 @@ const blankModel = (): ModelConfig => ({
     pricing_output: 0.000010,
 });
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const pct = (today: number, limit: number) => Math.min(100, (today / Math.max(limit, 0.01)) * 100).toFixed(0);
+
+/** Format a cooldown timestamp into Moscow time (UTC+3) human-readable string */
+function formatCooldown(iso: string): string {
+    const d = new Date(iso);
+    // UTC+3 = add 3*60 minutes
+    const msk = new Date(d.getTime() + 3 * 60 * 60 * 1000);
+    return msk.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' МСК';
+}
+
+/** Returns true if group is in cooldown */
+const isOnCooldown = (g: ModelGroup) => !!g.cooldown_until && new Date(g.cooldown_until) > new Date();
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -169,9 +181,10 @@ export default function ManagePage() {
         const expanded = expandedGroup === group.id;
         const usedPct = parseFloat(pct(group.spend_today, group.spend_limit));
         const barColor = usedPct >= 90 ? "bg-red-500" : usedPct >= 60 ? "bg-amber-400" : "bg-emerald-500";
+        const onCooldown = isOnCooldown(group);
 
         return (
-            <div className={`border rounded-xl p-4 mb-3 transition-all ${statusColors[group.status]}`}>
+            <div className={`border rounded-xl p-4 mb-3 transition-all ${onCooldown ? "bg-amber-50 border-amber-200 text-amber-800" : statusColors[group.status]}`}>
                 <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                         <div className="font-semibold text-sm truncate">{group.name}</div>
@@ -179,6 +192,11 @@ export default function ManagePage() {
                             {group.models_config?.length || 0} model{group.models_config?.length !== 1 ? "s" : ""} ·{" "}
                             <span className="font-mono">${group.spend_today?.toFixed(2) || "0.00"} / ${group.spend_limit}</span>
                         </div>
+                        {onCooldown && group.cooldown_until && (
+                            <div className="mt-1 text-xs font-medium text-amber-700">
+                                ⏳ Кулдаун до {formatCooldown(group.cooldown_until)}
+                            </div>
+                        )}
                         <div className="mt-2 h-1.5 bg-black/10 rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${barColor}`} style={{ width: `${usedPct}%` }} />
                         </div>
