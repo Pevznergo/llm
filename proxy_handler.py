@@ -93,13 +93,16 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
                 if isinstance(proxy, str):
                     proxy = proxy.strip()
 
-                # 1. Set proxy_url to None so the LLM providers (Google, OpenAI) behave normally
+                # 1. Pop proxy_url completely so the LLM providers (Google, OpenAI) behave normally
                 if "proxy_url" in data.get("litellm_params", {}):
-                    data["litellm_params"]["proxy_url"] = None
+                    data["litellm_params"].pop("proxy_url", None)
                 
                 if "proxy_url" in data:
-                    data["proxy_url"] = None
+                    data.pop("proxy_url", None)
                 
+                # Also remove from any nested kwargs that LiteLLM might pass down
+                if "kwargs" in data and "proxy_url" in data["kwargs"]:
+                    data["kwargs"].pop("proxy_url", None)
                 # 2. Attach the proxy client Transport natively using a connection pool
                 if proxy not in self.client_cache:
                     self.client_cache[proxy] = httpx.AsyncClient(proxy=proxy)
