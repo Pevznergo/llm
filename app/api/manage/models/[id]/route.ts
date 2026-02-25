@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateManagedModelStatus, deleteManagedModel } from "@/lib/managed-models-db";
-import { deleteModel } from "@/lib/litellm";
-import { sql } from "@/lib/db";
+import { updateManagedModelStatus, deleteManagedModel } from "../../../../../lib/managed-models-db";
+import { deleteModel } from "../../../../../lib/litellm";
+import { sql } from "../../../../../lib/db";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
     try {
