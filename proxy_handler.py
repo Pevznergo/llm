@@ -90,8 +90,15 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
             # LiteLLM from overwriting the default API_BASE (which breaks native headers/auth).
             # We then inject it as an explicit Transport Client layer via httpx.
             if proxy:
-                # 1. Remove proxy_url so the LLM providers (Google, OpenAI) behave normally
-                data["litellm_params"].pop("proxy_url", None)
+                if isinstance(proxy, str):
+                    proxy = proxy.strip()
+
+                # 1. Set proxy_url to None so the LLM providers (Google, OpenAI) behave normally
+                if "proxy_url" in data.get("litellm_params", {}):
+                    data["litellm_params"]["proxy_url"] = None
+                
+                if "proxy_url" in data:
+                    data["proxy_url"] = None
                 
                 # 2. Attach the proxy client Transport natively using a connection pool
                 if proxy not in self.client_cache:
