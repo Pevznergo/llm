@@ -20,32 +20,59 @@ function normalizeProxyUrl(rawUrl: string): string {
     return rawUrl;
 }
 
-/** Deterministic port per model group: 8090 + modelId (base 8090 to avoid common port conflicts) */
+/** Deterministic port per model group: 8090 + modelId */
 const gostPort = (modelId: number) => 8090 + modelId;
 
-export async function spawnGostContainer(modelId: number, proxyUrl: string): Promise<{ containerName: string, internalApiBase: string }> {
+/**
+ * Spawn a Gost container that acts as an HTTP → SOCKS5 relay.
+ * - Listens on :PORT as HTTP server
+ * - Forwards all traffic through SOCKS5 to the targetApiBase host
+ *
+ * LiteLLM sets api_base = http://containerName:PORT
+ * Gost relays HTTP requests through SOCKS5 → real API endpoint
+ */
+export async function spawnGostContainer(
+    modelId: number,
+    proxyUrl: string,
+    targetApiBase?: string
+): Promise<{ containerName: string, internalApiBase: string }> {
     const port = gostPort(modelId);
     const containerName = `gost_proxy_model_${modelId}`;
     const normalizedProxy = normalizeProxyUrl(proxyUrl);
 
-    console.log(`[GostManager] Spawning container ${containerName} mapped to ${normalizedProxy} on port ${port}...`);
+    // Extract host from targetApiBase for the Gost forwarding chain
+    // e.g. "https://generativelanguage.googleapis.com/v1beta/openai/" → "generativelanguage.googleapis.com:443"
+    let forwardHost = '';
+    if (targetApiBase) {
+        try {
+            const u = new URL(targetApiBase);
+            const defaultPort = u.protocol === 'https:' ? '443' : '80';
+            forwardHost = `${u.hostname}:${u.port || defaultPort}`;
+        } catch { /* keep empty */ }
+    }
 
-    const runCmd = `docker run -d --name ${containerName} --restart always gogost/gost -L=http://:${port} -F=${normalizedProxy}`;
+    console.log(`[GostManager] Spawning ${containerName} port=${port} target=${forwardHost || 'dynamic'} via ${normalizedProxy}`);
+
+    // Gost TCP relay: local HTTP listens on :port, forwards TCP to forwardHost through SOCKS5
+    // LiteLLM api_base = https://containerName:port (Gost passes TLS through to the real server)
+    const gostArgs = forwardHost
+        ? `-L=tcp://:${port}/${forwardHost} -F=${normalizedProxy}`
+        : `-L=http://:${port} -F=${normalizedProxy}`;
+
+    // Join the litellm_default network so LiteLLM can reach gost by container name
+    const runCmd = `docker run -d --name ${containerName} --network litellm_default --restart always gogost/gost ${gostArgs}`;
 
     try {
         const { stdout, stderr } = await execAsync(runCmd);
         if (stderr && !stderr.includes('WARNING')) {
             console.warn(`[GostManager] Docker Stderr: ${stderr}`);
         }
+        console.log(`[GostManager] Spawned ${containerName}: ${stdout.trim()}`);
 
-        console.log(`[GostManager] Spawning successful. Container hash: ${stdout.trim()}`);
-
-        // The API base LiteLLM needs to target this specific proxy
-        // Because they share the docker network, LiteLLM can resolve the containerName
-        // But since Next.js might be outside the network, the API base depends on architecture.
-        // Easiest is using host.docker.internal or explicit IP if NextJS is bare-metal.
-        // Assuming LiteLLM resolves this container correctly:
-        const internalApiBase = `http://${containerName}:${port}/v1`;
+        // api_base uses HTTPS to the container — Gost relays TCP so TLS passes through to real server
+        const internalApiBase = forwardHost
+            ? `https://${containerName}:${port}`
+            : `http://${containerName}:${port}`;
 
         return { containerName, internalApiBase };
     } catch (e: any) {

@@ -25,52 +25,69 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
             return NextResponse.json({ error: 'No models configured in this group' }, { status: 400 });
         }
 
-        // Spawn Gost proxy if proxy_url is set but container not yet created
-        let gostContainerId = group.gost_container_id;
-        let apiBase: string | undefined = undefined;
-
-        if (group.proxy_url && !gostContainerId) {
-            try {
-                const proxyInfo = await spawnGostContainer(id, group.proxy_url);
-                gostContainerId = proxyInfo.containerName;
-                apiBase = proxyInfo.internalApiBase;
-                await sql`UPDATE managed_models SET gost_container_id = ${gostContainerId} WHERE id = ${id}`;
-            } catch (e: any) {
-                console.warn(`[Activate] Could not spawn Gost for group ${id}:`, e.message);
-                // Continue without proxy — models can still be registered directly
-            }
-        } else if (gostContainerId) {
-            apiBase = `http://${gostContainerId}:${8080 + id}/v1`;
-        }
-
         // Register each model in LiteLLM
         const registeredIds: string[] = [];
         const errors: string[] = [];
 
-        // When Gost is running, route LiteLLM → Google through Gost as HTTP forward proxy
-        const gostProxyUrl = gostContainerId ? `http://${gostContainerId}:${8090 + id}` : undefined;
-
         for (const modelDef of modelsConfig) {
             try {
-                const internalId = `managed_group_${id}_${modelDef.litellm_name.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+                // Determine the effective api_base for this model
+                // If group has a proxy_url, spawn a Gost container per model group (shared container)
+                // Gost: TCP relay → target API through SOCKS5
+                let effectiveApiBase = modelDef.api_base;
 
-                const litellmParams: Record<string, unknown> = {
-                    model: modelDef.litellm_name,
-                    api_key: modelDef.api_key,
-                    api_base: modelDef.api_base, // real provider URL — e.g. generativelanguage.googleapis.com
-                    input_cost_per_token: modelDef.pricing_input,
-                    output_cost_per_token: modelDef.pricing_output,
-                    custom_llm_provider: 'openai',
-                };
+                if (group.proxy_url) {
+                    let gostContainerId = group.gost_container_id;
+                    let gostApiBase: string | undefined;
 
-                // If Gost proxy is running, route all requests for this model through it
-                if (gostProxyUrl) {
-                    litellmParams.proxy = gostProxyUrl; // Gost is HTTP forward proxy → SOCKS5 upstream
+                    if (!gostContainerId) {
+                        try {
+                            // Pass the first model's api_base as the TCP relay target
+                            const primaryApiBase = modelsConfig[0]?.api_base;
+                            const proxyInfo = await spawnGostContainer(id, group.proxy_url, primaryApiBase);
+                            gostContainerId = proxyInfo.containerName;
+                            gostApiBase = proxyInfo.internalApiBase;
+                            await sql`UPDATE managed_models SET gost_container_id = ${gostContainerId} WHERE id = ${id}`;
+                            console.log(`[Activate] Spawned Gost: ${gostContainerId}, api_base=${gostApiBase}`);
+                        } catch (e: any) {
+                            console.warn(`[Activate] Could not spawn Gost for group ${id}:`, e.message);
+                            // Continue without proxy
+                        }
+                    } else {
+                        // Reconstruct from existing container
+                        // Gost TCP relay: api_base = https://containerName:port (passes TLS through)
+                        const port = 8090 + id;
+                        // Check if primary api_base is HTTPS to determine scheme
+                        const primaryApiBase = modelsConfig[0]?.api_base || '';
+                        gostApiBase = primaryApiBase.startsWith('https')
+                            ? `https://${gostContainerId}:${port}`
+                            : `http://${gostContainerId}:${port}`;
+                    }
+
+                    // LiteLLM points to Gost; Gost relays through SOCKS5 to real API
+                    if (gostApiBase) {
+                        // Preserve the URL path from the original api_base
+                        try {
+                            const originalUrl = new URL(modelDef.api_base);
+                            effectiveApiBase = `${gostApiBase}${originalUrl.pathname}`;
+                        } catch {
+                            effectiveApiBase = gostApiBase;
+                        }
+                    }
                 }
+
+                const internalId = `managed_group_${id}_${modelDef.litellm_name.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
                 const res = await axios.post(`${LITELLM_URL}/model/new`, {
                     model_name: modelDef.public_name,
-                    litellm_params: litellmParams,
+                    litellm_params: {
+                        model: modelDef.litellm_name,
+                        api_key: modelDef.api_key,
+                        api_base: effectiveApiBase,
+                        input_cost_per_token: modelDef.pricing_input,
+                        output_cost_per_token: modelDef.pricing_output,
+                        custom_llm_provider: 'openai',
+                    },
                     model_info: { id: internalId, base_model: modelDef.public_name },
                 }, {
                     headers: { Authorization: `Bearer ${masterKey}` },
@@ -78,7 +95,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
                 const litellmId = res.data?.data?.model_info?.id || internalId;
                 registeredIds.push(litellmId);
-                console.log(`[Activate] Registered model ${modelDef.public_name} → LiteLLM ID ${litellmId}`);
+                console.log(`[Activate] Registered ${modelDef.public_name} → api_base=${effectiveApiBase}`);
             } catch (e: any) {
                 const msg = `Failed to register ${modelDef.public_name}: ${e.response?.data?.error?.message || e.message}`;
                 errors.push(msg);
@@ -93,7 +110,6 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
             }, { status: 500 });
         }
 
-        // Mark group as active, save litellm IDs
         await sql`
             UPDATE managed_models 
             SET status = 'active', 
