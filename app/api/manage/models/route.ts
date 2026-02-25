@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addManagedModel, getManagedModels } from "@/lib/managed-models-db";
+import { addManagedModel, getManagedModels } from "../../../../lib/managed-models-db";
 
 export async function GET() {
     const models = await getManagedModels();
