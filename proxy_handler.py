@@ -82,6 +82,15 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
             print(f"[SlackAlert] Setup failed: {e}")
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+        from fastapi import HTTPException
+        
+        # MAINTENANCE MODE: Block all requests made via virtual keys
+        if user_api_key_dict is not None:
+            raise HTTPException(
+                status_code=500,
+                detail="The server is currently being maintained, please try again later~"
+            )
+
         try:
             params = data.get("litellm_params", {})
             proxy = params.get("proxy_url")
