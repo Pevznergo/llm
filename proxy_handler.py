@@ -86,20 +86,20 @@ class ProxyHandler(litellm.integrations.custom_logger.CustomLogger):
             params = data.get("litellm_params", {})
             proxy = params.get("proxy_url")
             
-            # If a SOCKS5 proxy was configured in the UI, we intercept it here to prevent
+            # If a proxy was configured in the UI, we intercept it here to prevent
             # LiteLLM from overwriting the default API_BASE (which breaks native headers/auth).
             # We then inject it as an explicit Transport Client layer via httpx.
-            if proxy and proxy.startswith("socks5"):
-                # 1. Nullify proxy_url so the LLM providers (Google, OpenAI) behave normally
-                data["litellm_params"]["proxy_url"] = None
+            if proxy:
+                # 1. Remove proxy_url so the LLM providers (Google, OpenAI) behave normally
+                data["litellm_params"].pop("proxy_url", None)
                 
-                # 2. Attach the SOCKS proxy client Transport natively using a connection pool
+                # 2. Attach the proxy client Transport natively using a connection pool
                 if proxy not in self.client_cache:
                     self.client_cache[proxy] = httpx.AsyncClient(proxy=proxy)
                 
                 data["client"] = self.client_cache[proxy]
                 key_preview = str(data.get("api_key", params.get("api_key", "MISSING_KEY")))[0:15]
-                print(f"[ProxyIntercept] Successfully bound SOCKS proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
+                print(f"[ProxyIntercept] Successfully bound proxy transport to model {data.get('model')}. Resolved Key: {key_preview}...")
         except Exception as e:
             print(f"[ProxyIntercept] Failed to inject network proxy: {str(e)}")
             
