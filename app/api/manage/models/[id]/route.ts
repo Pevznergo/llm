@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { stopGostContainer } from '../../../../../lib/gost_manager';
+import { stopGostContainer } from '../../gost_manager';
 import axios from 'axios';
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
