@@ -58,7 +58,7 @@ export default function ManageDashboard() {
                     api_key: templateData.api_key,
                     api_base: templateData.api_base || undefined,
                     proxy_url: templateData.proxy_url || undefined,
-                    model: templateData.model_name
+                    model: "openai/" + templateData.model_name
                 };
             } else {
                 try {
@@ -100,12 +100,11 @@ export default function ManageDashboard() {
                     model_name: templateData.model_name,
                     daily_request_limit: Number(templateData.max_requests_per_day),
                     litellm_params: {
-                        model: templateData.model_name,
+                        model: "openai/" + templateData.model_name,
                         api_key: templateData.api_key,
                         api_base: templateData.api_base || undefined,
                         proxy_url: templateData.proxy_url || undefined,
-                        // We do not force custom_llm_provider. LiteLLM will infer from model name (e.g., gemini/gemini-2.5-pro)
-                        // If they are using an OpenAI compatible proxy, they should prefix model with openai/
+                        custom_llm_provider: "openai"
                     },
                     model_info: {
                         db_model: true,
@@ -369,11 +368,11 @@ export default function ManageDashboard() {
                                                 value={templateData.api_base}
                                                 onChange={e => setTemplateData({ ...templateData, api_base: e.target.value })}
                                                 className="w-full bg-slate-950 border border-slate-800 rounded p-3 text-white focus:border-blue-500 focus:outline-none"
-                                                placeholder="https://api.openai.com/v1"
+                                                placeholder="https://api.kie.ai/v1"
                                             />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm text-slate-400 font-bold tracking-wide">HTTP PROXY URL (Optional)</label>
+                                            <label className="text-sm text-slate-400 font-bold tracking-wide">HTTP/SOCKS PROXY URL (Optional)</label>
                                             <input
                                                 value={templateData.proxy_url}
                                                 onChange={e => setTemplateData({ ...templateData, proxy_url: e.target.value })}
