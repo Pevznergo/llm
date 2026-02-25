@@ -8,6 +8,7 @@ import { createEcosystem, setTopicClosed, getChatEntity, pinTelegramTopic, ensur
 import { getTelegramClient } from './lib/tg';
 import { Bot, InlineKeyboard } from 'grammy';
 import { Api } from 'telegram';
+import { runDispatcher } from './lib/dispatcher';
 
 // Log with timestamp
 const log = (msg: string, ...args: any[]) => {
@@ -273,6 +274,8 @@ async function main() {
         if (client) log("Telegram Client connected.");
     } catch (e) { errorLog("TG Connection failed", e); }
 
+    let lastDispatcherRun = 0;
+
     while (true) {
         try {
             const floodWait = await getFloodWait();
@@ -280,6 +283,12 @@ async function main() {
                 log(`FloodWait Global: ${floodWait}s`);
                 await new Promise(r => setTimeout(r, floodWait * 1000));
                 continue;
+            }
+
+            // Run Model Dispatcher every 30 seconds
+            if (Date.now() - lastDispatcherRun > 30000) {
+                await runDispatcher();
+                lastDispatcherRun = Date.now();
             }
 
             // Find oldest READY task

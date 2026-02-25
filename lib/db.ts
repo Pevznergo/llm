@@ -274,6 +274,20 @@ export async function initDatabase() {
       )
     `;
 
+    // Managed Models table (New)
+    await sql`
+      CREATE TABLE IF NOT EXISTS managed_models (
+        id SERIAL PRIMARY KEY,
+        model_name VARCHAR(255) NOT NULL,
+        litellm_params JSONB NOT NULL,
+        model_info JSONB,
+        daily_request_limit INTEGER,
+        requests_today INTEGER DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'queued',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+
     // Market Ads table (New)
     await sql`
       CREATE TABLE IF NOT EXISTS market_ads (
