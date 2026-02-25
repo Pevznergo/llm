@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
-import { spawnGostContainer, stopGostContainer } from '@/lib/gost_manager';
+import { spawnGostContainer, stopGostContainer } from '../../../../lib/gost_manager';
 
 export async function GET() {
     try {

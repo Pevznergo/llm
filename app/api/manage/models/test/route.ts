@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { spawnGostContainer, stopGostContainer } from '@/lib/gost_manager';
+import { spawnGostContainer, stopGostContainer } from '../../../../../lib/gost_manager';
 import axios from 'axios';
 
 export async function POST(req: Request) {
