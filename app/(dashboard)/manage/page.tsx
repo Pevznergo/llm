@@ -179,7 +179,10 @@ export default function ManagePage() {
     // ─── Group card ────────────────────────────────────────────────────────────
     const GroupCard = ({ group }: { group: ModelGroup }) => {
         const expanded = expandedGroup === group.id;
-        const usedPct = parseFloat(pct(group.spend_today, group.spend_limit));
+        // Postgres returns DECIMAL as strings — coerce to numbers to avoid toFixed() TypeError
+        const spendToday = Number(group.spend_today ?? 0);
+        const spendLimit = Number(group.spend_limit ?? 300);
+        const usedPct = parseFloat(pct(spendToday, spendLimit));
         const barColor = usedPct >= 90 ? "bg-red-500" : usedPct >= 60 ? "bg-amber-400" : "bg-emerald-500";
         const onCooldown = isOnCooldown(group);
 
@@ -190,7 +193,7 @@ export default function ManagePage() {
                         <div className="font-semibold text-sm truncate">{group.name}</div>
                         <div className="text-xs opacity-70 mt-0.5">
                             {group.models_config?.length || 0} model{group.models_config?.length !== 1 ? "s" : ""} ·{" "}
-                            <span className="font-mono">${group.spend_today?.toFixed(2) || "0.00"} / ${group.spend_limit}</span>
+                            <span className="font-mono">${spendToday.toFixed(2)} / ${spendLimit}</span>
                         </div>
                         {onCooldown && group.cooldown_until && (
                             <div className="mt-1 text-xs font-medium text-amber-700">
