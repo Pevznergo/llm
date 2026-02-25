@@ -5,6 +5,7 @@ import { Plus, Trash2, TestTube2, Save, ChevronDown, ChevronUp, Loader2, PlugZap
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ModelConfig {
+    api_key: string;        // per-model API key
     litellm_name: string;   // internal: e.g., "openai/gemini-2.5-pro"
     public_name: string;    // e.g., "gemini-2.5-pro"
     api_base: string;       // e.g., "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -15,7 +16,6 @@ interface ModelConfig {
 interface ModelGroup {
     id: number;
     name: string;
-    api_key: string;
     proxy_url: string | null;
     gost_container_id: string | null;
     spend_limit: number;
@@ -39,6 +39,7 @@ interface Template {
 // ─── Default blank model config ───────────────────────────────────────────────
 
 const blankModel = (): ModelConfig => ({
+    api_key: "",
     litellm_name: "openai/gemini-2.5-pro",
     public_name: "gemini-2.5-pro",
     api_base: "https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -59,7 +60,6 @@ export default function ManagePage() {
 
     // Form state
     const [groupName, setGroupName] = useState("");
-    const [apiKey, setApiKey] = useState("");
     const [proxyUrl, setProxyUrl] = useState("");
     const [spendLimit, setSpendLimit] = useState(300);
     const [modelList, setModelList] = useState<ModelConfig[]>([blankModel()]);
@@ -84,7 +84,7 @@ export default function ManagePage() {
     useEffect(() => { load(); }, [load]);
 
     const resetForm = () => {
-        setGroupName(""); setApiKey(""); setProxyUrl("");
+        setGroupName(""); setProxyUrl("");
         setSpendLimit(300); setModelList([blankModel()]); setSaveTemplateName("");
         setTestResult(null);
     };
@@ -96,6 +96,7 @@ export default function ManagePage() {
         setModelList(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m));
     const applyTemplate = (idx: number, tpl: Template) => {
         setModelList(prev => prev.map((m, i) => i === idx ? {
+            api_key: m.api_key, // preserve the already-entered api key
             litellm_name: tpl.litellm_name,
             public_name: tpl.public_name,
             api_base: tpl.api_base,
@@ -116,13 +117,14 @@ export default function ManagePage() {
         else alert(data.error);
     };
 
-    // ── Test connection ─────────────────────────────────────────────────────────
+    // ── Test connection (uses first model's api_key) ────────────────────────────
     const testConnection = async () => {
-        if (!apiKey) return alert("Enter an API key first");
+        const firstKey = modelList[0]?.api_key;
+        if (!firstKey) return alert("Enter an API key for the first model first");
         setIsTesting(true); setTestResult(null);
         const res = await fetch("/api/manage/models/test", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, proxy_url: proxyUrl || null }),
+            body: JSON.stringify({ api_key: firstKey, proxy_url: proxyUrl || null }),
         });
         const data = await res.json();
         setTestResult({ ok: res.ok, msg: res.ok ? data.message : data.error });
@@ -131,11 +133,12 @@ export default function ManagePage() {
 
     // ── Submit new group ────────────────────────────────────────────────────────
     const submitGroup = async () => {
-        if (!groupName || !apiKey || modelList.length === 0) return alert("Fill in all required fields");
+        if (!groupName || modelList.length === 0 || modelList.some(m => !m.api_key || !m.litellm_name || !m.public_name))
+            return alert("Fill in all required fields (each model needs an API key, litellm name, and public name)");
         setIsSubmitting(true);
         const res = await fetch("/api/manage/models", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: groupName, api_key: apiKey, proxy_url: proxyUrl || null, spend_limit: spendLimit, models_config: modelList }),
+            body: JSON.stringify({ name: groupName, proxy_url: proxyUrl || null, spend_limit: spendLimit, models_config: modelList }),
         });
         const data = await res.json();
         if (res.ok) { setIsModalOpen(false); resetForm(); load(); }
@@ -273,11 +276,7 @@ export default function ManagePage() {
                                             placeholder="DeepSeek Proxy Node 1" value={groupName} onChange={e => setGroupName(e.target.value)} />
                                     </div>
 
-                                    <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-600 mb-1">Provider API Key *</label>
-                                        <input type="password" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
-                                            placeholder="sk-..." value={apiKey} onChange={e => setApiKey(e.target.value)} />
-                                    </div>
+
 
                                     <div>
                                         <label className="block text-xs font-medium text-gray-600 mb-1">SOCKS5 Proxy URL (optional)</label>
@@ -296,7 +295,7 @@ export default function ManagePage() {
 
                                 {/* Test Connection */}
                                 <div className="mt-3 flex items-center gap-3">
-                                    <button onClick={testConnection} disabled={isTesting || !apiKey}
+                                    <button onClick={testConnection} disabled={isTesting || !modelList[0]?.api_key}
                                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
                                         {isTesting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PlugZap className="h-3.5 w-3.5" />}
                                         Test Connection
@@ -341,6 +340,12 @@ export default function ManagePage() {
 
                                             {/* Model fields */}
                                             <div className="grid grid-cols-2 gap-2">
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs text-gray-500 mb-1">Provider API Key *</label>
+                                                    <input type="password" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"
+                                                        placeholder="sk-..." value={model.api_key}
+                                                        onChange={e => updateModel(idx, "api_key", e.target.value)} />
+                                                </div>
                                                 <div className="col-span-2">
                                                     <label className="block text-xs text-gray-500 mb-1">Public Model Name *</label>
                                                     <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-black/20"

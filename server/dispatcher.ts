@@ -106,14 +106,14 @@ async function runDispatcherCycle() {
                     const internalId = `managed_group_${nextGroup.id}_${modelDef.litellm_name.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
                     const addRes = await axios.post(`${LITELLM_URL}/model/new`, {
-                        model_name: modelDef.public_name, // e.g., gemini-2.5-pro
+                        model_name: modelDef.public_name,
                         litellm_params: {
-                            model: modelDef.litellm_name, // e.g., openai/gemini-pro
-                            api_key: nextGroup.api_key,
-                            api_base: modelDef.api_base || apiBase, // use specific base if available, else group's proxy
+                            model: modelDef.litellm_name,
+                            api_key: modelDef.api_key, // per-model key
+                            api_base: modelDef.api_base || apiBase,
                             input_cost_per_token: modelDef.pricing_input,
                             output_cost_per_token: modelDef.pricing_output,
-                            custom_llm_provider: "openai" // or map dynamically if needed
+                            custom_llm_provider: "openai"
                         },
                         model_info: { id: internalId, base_model: modelDef.public_name }
                     }, {
