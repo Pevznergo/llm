@@ -1,0 +1,8 @@
+{
+    "name": "socks-reverse-proxy",
+    "version": "1.0.0",
+    "type": "module",
+    "dependencies": {
+        "socks-proxy-agent": "^8.0.2"
+    }
+}

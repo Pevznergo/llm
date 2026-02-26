@@ -1,8 +1,10 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import path from 'path';
 
 const execAsync = promisify(exec);
+
+/** Docker image name for the reverse proxy */
+const PROXY_IMAGE = 'socks-reverse-proxy';
 
 /**
  * Normalize proxy URL format.
@@ -10,85 +12,98 @@ const execAsync = promisify(exec);
  * and shorthand `socks5h://ip:port:user:pass` (ip:port:login:password).
  */
 function normalizeProxyUrl(rawUrl: string): string {
-    // Match shorthand: scheme://ip:port:user:pass
     const shorthand = rawUrl.match(/^(socks5h?|http|https):\/\/([^:]+):(\d+):([^:]+):(.+)$/);
     if (shorthand) {
         const [, scheme, host, port, user, pass] = shorthand;
         return `${scheme}://${user}:${pass}@${host}:${port}`;
     }
-    // Already in standard form
     return rawUrl;
 }
 
 /** Deterministic port per model group: 8090 + modelId */
-const gostPort = (modelId: number) => 8090 + modelId;
+const proxyPort = (modelId: number) => 8090 + modelId;
 
 /**
- * Spawn a Gost container that acts as an HTTP → SOCKS5 relay.
- * - Listens on :PORT as HTTP server
- * - Forwards all traffic through SOCKS5 to the targetApiBase host
+ * Ensure the socks-reverse-proxy Docker image is built.
+ * Idempotent — skips if image already exists.
+ */
+async function ensureImage(): Promise<void> {
+    try {
+        const { stdout } = await execAsync(`docker images -q ${PROXY_IMAGE}`);
+        if (stdout.trim()) return; // already built
+    } catch { /* continue to build */ }
+
+    console.log('[ProxyManager] Building socks-reverse-proxy Docker image...');
+    await execAsync(`docker build -t ${PROXY_IMAGE} /root/litellm/socks-reverse-proxy`);
+    console.log('[ProxyManager] Image built successfully.');
+}
+
+/**
+ * Spawn a reverse proxy container.
  *
- * LiteLLM sets api_base = http://containerName:PORT
- * Gost relays HTTP requests through SOCKS5 → real API endpoint
+ * Flow:  LiteLLM ──HTTP──▶ container:PORT ──HTTPS via SOCKS5H──▶ real API
+ *
+ * @param modelId      - Group ID (determines container name & port)
+ * @param socksProxy   - SOCKS5H URL, e.g. socks5h://user:pass@ip:port or shorthand
+ * @param targetApiBase - Real upstream URL, e.g. https://generativelanguage.googleapis.com
+ * @returns containerName and the HTTP api_base LiteLLM should use
  */
 export async function spawnGostContainer(
     modelId: number,
-    proxyUrl: string,
-    targetApiBase?: string
+    socksProxy: string,
+    targetApiBase: string
 ): Promise<{ containerName: string, internalApiBase: string }> {
-    const port = gostPort(modelId);
-    const containerName = `gost_proxy_model_${modelId}`;
-    const normalizedProxy = normalizeProxyUrl(proxyUrl);
+    await ensureImage();
 
-    // Extract host from targetApiBase for the Gost forwarding chain
-    // e.g. "https://generativelanguage.googleapis.com/v1beta/openai/" → "generativelanguage.googleapis.com:443"
-    let forwardHost = '';
-    if (targetApiBase) {
-        try {
-            const u = new URL(targetApiBase);
-            const defaultPort = u.protocol === 'https:' ? '443' : '80';
-            forwardHost = `${u.hostname}:${u.port || defaultPort}`;
-        } catch { /* keep empty */ }
-    }
+    const port = proxyPort(modelId);
+    const containerName = `socks_proxy_model_${modelId}`;
+    const normalizedProxy = normalizeProxyUrl(socksProxy);
 
-    console.log(`[GostManager] Spawning ${containerName} port=${port} target=${forwardHost || 'dynamic'} via ${normalizedProxy}`);
+    // Extract the origin (scheme + host) from the target for the reverse proxy
+    const targetUrl = new URL(targetApiBase);
+    const targetOrigin = targetUrl.origin; // e.g. https://generativelanguage.googleapis.com
 
-    // Gost TCP relay: local HTTP listens on :port, forwards TCP to forwardHost through SOCKS5
-    // LiteLLM api_base = https://containerName:port (Gost passes TLS through to the real server)
-    const gostArgs = forwardHost
-        ? `-L=tcp://:${port}/${forwardHost} -F=${normalizedProxy}`
-        : `-L=http://:${port} -F=${normalizedProxy}`;
+    console.log(`[ProxyManager] Spawning ${containerName} port=${port} target=${targetOrigin} via SOCKS5H`);
 
-    // Join the litellm_default network so LiteLLM can reach gost by container name
-    const runCmd = `docker run -d --name ${containerName} --network litellm_default --restart always gogost/gost ${gostArgs}`;
+    // Remove old container if it exists (idempotent)
+    await execAsync(`docker rm -f ${containerName}`).catch(() => { });
+
+    const runCmd = [
+        'docker run -d',
+        `--name ${containerName}`,
+        '--network litellm_default',
+        '--restart always',
+        `-e PORT=${port}`,
+        `-e TARGET_URL=${targetOrigin}`,
+        `-e SOCKS_PROXY=${normalizedProxy}`,
+        PROXY_IMAGE,
+    ].join(' ');
 
     try {
         const { stdout, stderr } = await execAsync(runCmd);
         if (stderr && !stderr.includes('WARNING')) {
-            console.warn(`[GostManager] Docker Stderr: ${stderr}`);
+            console.warn(`[ProxyManager] Docker Stderr: ${stderr}`);
         }
-        console.log(`[GostManager] Spawned ${containerName}: ${stdout.trim()}`);
+        console.log(`[ProxyManager] Spawned ${containerName}: ${stdout.trim()}`);
 
-        // api_base uses HTTPS to the container — Gost relays TCP so TLS passes through to real server
-        const internalApiBase = forwardHost
-            ? `https://${containerName}:${port}`
-            : `http://${containerName}:${port}`;
+        // LiteLLM api_base = http://containerName:PORT + original path
+        // e.g. http://socks_proxy_model_4:8094/v1beta/openai/
+        const internalApiBase = `http://${containerName}:${port}${targetUrl.pathname}`;
 
         return { containerName, internalApiBase };
     } catch (e: any) {
-        throw new Error(`Failed to spawn Gost proxy: ${e.message}`);
+        throw new Error(`Failed to spawn proxy: ${e.message}`);
     }
 }
 
 export async function stopGostContainer(containerName: string): Promise<void> {
-    console.log(`[GostManager] Killing and removing container ${containerName}...`);
+    console.log(`[ProxyManager] Killing and removing container ${containerName}...`);
     try {
         await execAsync(`docker rm -f ${containerName}`);
-        console.log(`[GostManager] Removed ${containerName}`);
+        console.log(`[ProxyManager] Removed ${containerName}`);
     } catch (e: any) {
-        // Only throw if it's not a "No such container" error
-        if (!e.message.includes("No such container") && !e.message.includes("Error: No such container")) {
-            throw new Error(`Failed to kill Gost proxy: ${e.message}`);
+        if (!e.message.includes('No such container')) {
+            throw new Error(`Failed to kill proxy: ${e.message}`);
         }
     }
 }
