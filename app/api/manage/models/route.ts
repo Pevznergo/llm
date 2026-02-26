@@ -77,20 +77,28 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Each model must have api_key, litellm_name and public_name" }, { status: 400 });
         }
 
-        // Insert the Group record (no group-level api_key — it's per-model inside models_config)
-        const result = await sql`
-            INSERT INTO managed_models (name, proxy_url, spend_limit, spend_today, models_config, status)
-            VALUES (${name}, ${proxy_url || null}, ${spend_limit}, 0, ${JSON.stringify(models_config)}, 'queued')
-            RETURNING id
-        `;
-        const newId = result[0].id;
+        // Create one queue entry per model (not a group)
+        // This allows activating/deactivating models independently
+        const createdIds: number[] = [];
 
-        // Proxy container is spawned when user clicks Activate (not at insert time)
-        // This avoids needing to know the api_base at queue time
+        for (let i = 0; i < models_config.length; i++) {
+            const modelDef = models_config[i];
+            const modelName = models_config.length === 1
+                ? name
+                : `${name} #${i + 1} (${modelDef.public_name})`;
+
+            const result = await sql`
+                INSERT INTO managed_models (name, proxy_url, spend_limit, spend_today, models_config, status)
+                VALUES (${modelName}, ${proxy_url || null}, ${spend_limit}, 0, ${JSON.stringify([modelDef])}, 'queued')
+                RETURNING id
+            `;
+            createdIds.push(result[0].id);
+        }
 
         return NextResponse.json({
             success: true,
-            id: newId,
+            ids: createdIds,
+            count: createdIds.length,
         });
 
     } catch (e: any) {
