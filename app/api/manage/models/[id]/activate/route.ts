@@ -63,7 +63,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
                         api_base: effectiveApiBase,
                         input_cost_per_token: modelDef.pricing_input,
                         output_cost_per_token: modelDef.pricing_output,
-                        custom_llm_provider: 'openai',
+                        custom_llm_provider: 'custom_openai',
                     },
                     model_info: { id: internalId, base_model: modelDef.public_name },
                 }, {
