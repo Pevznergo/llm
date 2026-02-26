@@ -52,7 +52,7 @@ export async function spawnGostContainer(
     modelId: number,
     socksProxy: string,
     targetApiBase: string
-): Promise<{ containerName: string, internalApiBase: string }> {
+): Promise<{ containerName: string, internalApiBase: string, externalApiBase: string }> {
     await ensureImage();
 
     const port = proxyPort(modelId);
@@ -72,6 +72,7 @@ export async function spawnGostContainer(
         'docker run -d',
         `--name ${containerName}`,
         '--network litellm_default',
+        `--publish ${port}:${port}`,
         '--restart always',
         `-e PORT=${port}`,
         `-e TARGET_URL=${targetOrigin}`,
@@ -86,11 +87,12 @@ export async function spawnGostContainer(
         }
         console.log(`[ProxyManager] Spawned ${containerName}: ${stdout.trim()}`);
 
-        // LiteLLM api_base = http://containerName:PORT + original path
-        // e.g. http://socks_proxy_model_4:8094/v1beta/openai/
+        // Internal: for LiteLLM (inside Docker) — uses container name
         const internalApiBase = `http://${containerName}:${port}${targetUrl.pathname}`;
+        // External: for Next.js test route (on host) — uses localhost
+        const externalApiBase = `http://127.0.0.1:${port}${targetUrl.pathname}`;
 
-        return { containerName, internalApiBase };
+        return { containerName, internalApiBase, externalApiBase };
     } catch (e: any) {
         throw new Error(`Failed to spawn proxy: ${e.message}`);
     }

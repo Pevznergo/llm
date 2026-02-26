@@ -23,7 +23,7 @@ export async function POST(req: Request) {
             try {
                 const proxyInfo = await spawnGostContainer(tempId, proxy_url, targetBase);
                 containerName = proxyInfo.containerName;
-                testBase = proxyInfo.internalApiBase;
+                testBase = proxyInfo.externalApiBase; // localhost:PORT — reachable from host
             } catch (e: any) {
                 return NextResponse.json({ error: `Failed to spawn test proxy: ${e.message}` }, { status: 500 });
             }
