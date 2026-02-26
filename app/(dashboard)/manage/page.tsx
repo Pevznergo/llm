@@ -132,12 +132,17 @@ export default function ManagePage() {
 
     // ── Test connection (uses first model's api_key) ────────────────────────────
     const testConnection = async () => {
-        const firstKey = modelList[0]?.api_key;
-        if (!firstKey) return alert("Enter an API key for the first model first");
+        const firstModel = modelList[0];
+        if (!firstModel?.api_key) return alert("Enter an API key for the first model first");
         setIsTesting(true); setTestResult(null);
         const res = await fetch("/api/manage/models/test", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: firstKey, proxy_url: proxyUrl || null }),
+            body: JSON.stringify({
+                api_key: firstModel.api_key,
+                proxy_url: proxyUrl || null,
+                api_base: firstModel.api_base || null,
+                litellm_name: firstModel.litellm_name || null,
+            }),
         });
         const data = await res.json();
         setTestResult({ ok: res.ok, msg: res.ok ? data.message : data.error });
