@@ -85,35 +85,12 @@ export async function POST(req: Request) {
         `;
         const newId = result[0].id;
 
-        // 2. Spawn the Gost Proxy if a proxy_url was provided
-        let containerName = null;
-        let internalApiBase = null;
-        if (proxy_url) {
-            try {
-                const proxyInfo = await spawnGostContainer(newId, proxy_url);
-                containerName = proxyInfo.containerName;
-                internalApiBase = proxyInfo.internalApiBase;
-            } catch (proxyError: any) {
-                // Rollback insertion if container fails to start
-                await sql`DELETE FROM managed_models WHERE id = ${newId}`;
-                return NextResponse.json({ error: `Failed to spawn proxy: ${proxyError.message}` }, { status: 500 });
-            }
-        }
-
-        // 3. Update the record with the container info
-        if (containerName) {
-            await sql`
-                UPDATE managed_models 
-                SET gost_container_id = ${containerName}
-                WHERE id = ${newId}
-            `;
-        }
+        // Proxy container is spawned when user clicks Activate (not at insert time)
+        // This avoids needing to know the api_base at queue time
 
         return NextResponse.json({
             success: true,
             id: newId,
-            gost_container_id: containerName,
-            internalApiBase
         });
 
     } catch (e: any) {

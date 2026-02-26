@@ -18,7 +18,8 @@ export async function POST(req: Request) {
 
         if (proxy_url) {
             // Spawn a temporary reverse proxy container
-            const tempId = Math.floor(Math.random() * 9000) + 90000;
+            // Keep tempId small so port (8090+tempId) stays under 65535
+            const tempId = Math.floor(Math.random() * 500) + 50000;
             try {
                 const proxyInfo = await spawnGostContainer(tempId, proxy_url, targetBase);
                 containerName = proxyInfo.containerName;
